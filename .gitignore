@@ -1,0 +1,16 @@
+# Configuration
+config.php
+*.log
+*.ini
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-*
+
+# Database exports
+*.sql

@@ -8,11 +8,17 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+$allowed_roles = ['Nurse', 'Doctor', 'Admin'];
+if (!in_array($_SESSION['role'], $allowed_roles)) {
+    die("Access denied.");
+}
+
+// Get current user role and name
 $current_role = $_SESSION['role'] ?? 'Guest';
 $current_name = $_SESSION['name'] ?? 'User';
 $current_user_id = $_SESSION['user_id'];
 
-// Role permissions (same as inventory.php)
+// Define role permissions for navigation (same as patients.php)
 $role_permissions = [
     'Admin' => [
         'dashboard.php' => 'Dashboard',
@@ -69,56 +75,51 @@ $role_permissions = [
 
 $allowed_pages = $role_permissions[$current_role] ?? ['dashboard.php' => 'Dashboard'];
 
-if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    header("Location: inventory.php?success=error&message=Invalid item ID");
-    exit;
+// Handle start and complete actions
+if (isset($_GET['start']) && is_numeric($_GET['start'])) {
+    $triage_id = (int)$_GET['start'];
+    $user_id = $_SESSION['user_id'];
+    execute($conn, "UPDATE triage SET status = 'in_consultation', started_by = ?, started_at = NOW() WHERE id = ?", "ii", [$user_id, $triage_id]);
+    header("Location: triage_queue.php");
+    exit();
+}
+if (isset($_GET['complete']) && is_numeric($_GET['complete'])) {
+    $triage_id = (int)$_GET['complete'];
+    $user_id = $_SESSION['user_id'];
+    execute($conn, "UPDATE triage SET status = 'completed', completed_by = ?, completed_at = NOW() WHERE id = ?", "ii", [$user_id, $triage_id]);
+    header("Location: triage_queue.php");
+    exit();
 }
 
-$id = (int)$_GET['id'];
-$is_admin = ($current_role === 'Admin');
-$is_inventory = ($current_role === 'Inventory');
+// Fetch waiting patients (all)
+$waiting = fetchAll($conn, "
+    SELECT t.*, p.first_name, p.last_name, p.patient_code,
+           TIMESTAMPDIFF(MINUTE, t.assessed_at, NOW()) as wait_minutes
+    FROM triage t
+    JOIN patients p ON t.patient_id = p.id
+    WHERE t.status = 'waiting'
+    ORDER BY t.severity DESC, t.assessed_at ASC
+");
 
-// Fetch item details
-$item = fetchOne($conn, "
-    SELECT i.*, u.full_name AS archived_by_name
-    FROM inventory_items i
-    LEFT JOIN users u ON i.archived_by = u.id
-    WHERE i.id = ?
-", "i", [$id]);
-
-if (!$item) {
-    header("Location: inventory.php?success=error&message=Item not found");
-    exit;
-}
-
-// Check if archive columns exist
-$table_check = fetchOne($conn, "SHOW COLUMNS FROM inventory_items LIKE 'is_archived'");
-$has_archive_columns = $table_check !== null;
-$is_archived = $has_archive_columns && !empty($item['is_archived']);
-
-// Stock status
-if ($item['quantity'] <= 0) {
-    $stock_status = 'out-of-stock';
-    $status_text = 'Out of Stock';
-} elseif ($item['quantity'] <= $item['threshold']) {
-    $stock_status = 'low-stock';
-    $status_text = 'Low Stock';
+// Fetch in consultation patients – filter by doctor if role is Doctor
+if ($current_role === 'Doctor') {
+    $in_consult = fetchAll($conn, "
+        SELECT t.*, p.first_name, p.last_name, p.patient_code, u.full_name AS doctor_name
+        FROM triage t
+        JOIN patients p ON t.patient_id = p.id
+        LEFT JOIN users u ON t.started_by = u.id
+        WHERE t.status = 'in_consultation' AND t.started_by = ?
+        ORDER BY t.assessed_at ASC
+    ", "i", [$current_user_id]);
 } else {
-    $stock_status = 'in-stock';
-    $status_text = 'In Stock';
-}
-
-// Fetch usage in surgeries
-$surgery_usage = fetchAll($conn, "
-    SELECT s.id, s.surgery_type, s.schedule_date, si.quantity_used
-    FROM surgery_inventory si
-    INNER JOIN surgeries s ON si.surgery_id = s.id
-    WHERE si.item_id = ?
-    ORDER BY s.schedule_date DESC
-", "i", [$id]);
-
-function formatDate($datetime) {
-    return $datetime ? date('F j, Y g:i A', strtotime($datetime)) : 'N/A';
+    $in_consult = fetchAll($conn, "
+        SELECT t.*, p.first_name, p.last_name, p.patient_code, u.full_name AS doctor_name
+        FROM triage t
+        JOIN patients p ON t.patient_id = p.id
+        LEFT JOIN users u ON t.started_by = u.id
+        WHERE t.status = 'in_consultation'
+        ORDER BY t.assessed_at ASC
+    ");
 }
 ?>
 <!DOCTYPE html>
@@ -126,9 +127,10 @@ function formatDate($datetime) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Hospital Dashboard - View Item</title>
+<title>Triage Queue</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Same CSS as patients.php – include all styles from before */
   :root{
     --bg: #eef3f7;
     --panel: #ffffff;
@@ -149,7 +151,7 @@ function formatDate($datetime) {
   }
   .app { display:flex; min-height:100vh; }
 
-  /* SIDEBAR */
+  /* SIDEBAR – same as patients.php */
   .sidebar {
     width:230px;
     background:linear-gradient(180deg, var(--sidebar), #001a33 120%);
@@ -220,6 +222,7 @@ function formatDate($datetime) {
     border-radius:10px;
     border:0;
     font-weight:600;
+    cursor:pointer;
     text-decoration:none;
     display:inline-block;
     transition:all 0.2s;
@@ -260,112 +263,41 @@ function formatDate($datetime) {
   .role-billing { background:#0066cc; color:white; }
   .role-socialworker { background:#34495e; color:white; }
 
-  /* Item Details Card */
-  .item-card{
+  /* Queue sections */
+  .queue-section{
     background:var(--panel);
-    padding:24px;
     border-radius:12px;
+    padding:20px;
+    margin-bottom:30px;
     box-shadow:var(--card-shadow);
-    margin-top:20px;
-    border:1px solid #f0f4f8;
   }
-  .item-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-bottom:20px;
-    padding-bottom:15px;
-    border-bottom:1px solid #eef2f7;
-  }
-  .item-header h3{
-    margin:0;
-    color:#1e3a5f;
-    font-size:18px;
-  }
-  .info-grid{
-    display:grid;
-    grid-template-columns:repeat(auto-fill, minmax(280px, 1fr));
-    gap:20px;
-    margin-bottom:25px;
-  }
-  .info-group{
+  table{ width:100%; border-collapse:collapse; }
+  th{
     background:#f8fbfd;
-    padding:15px;
-    border-radius:8px;
-    border-left:3px solid var(--navy-700);
-  }
-  .info-label{
-    font-size:12px;
-    color:var(--muted);
-    font-weight:600;
-    text-transform:uppercase;
-    letter-spacing:0.5px;
-    margin-bottom:5px;
-  }
-  .info-value{
-    font-size:15px;
-    color:#2b3b3b;
-    font-weight:500;
-    line-height:1.4;
-  }
-
-  .status{
-    display:inline-block;
-    padding:6px 10px;
-    border-radius:16px;
-    font-weight:600;
-    font-size:13px;
-  }
-  .in-stock{ background:#dff7e8; color:#1f7b3b; }
-  .low-stock{ background:#fff8e1; color:#8a6d00; }
-  .out-of-stock{ background:#fee2e2; color:#b91c1c; }
-  .archived{ background:#95a5a6; color:white; }
-
-  .section-title{
-    font-size:18px;
-    color:#1e3a5f;
-    margin:25px 0 15px 0;
-    padding-bottom:10px;
-    border-bottom:2px solid #eef2f7;
-  }
-
-  .usage-table{
-    width:100%;
-    border-collapse:collapse;
-  }
-  .usage-table th{
-    background:#f8fbfd;
-    padding:10px;
+    padding:12px;
     text-align:left;
     color:#6b7280;
-    font-weight:600;
-    font-size:13px;
     border-bottom:2px solid #e6eef0;
   }
-  .usage-table td{
-    padding:10px;
-    border-bottom:1px solid #f0f3f4;
-    font-size:14px;
+  td{ padding:12px; border-bottom:1px solid #f0f3f4; }
+  .severity-badge{
+    display:inline-block; padding:4px 10px; border-radius:20px; font-weight:600; font-size:12px;
   }
+  .sev1{ background:#d1fae5; color:#065f46; }
+  .sev2{ background:#fed7aa; color:#92400e; }
+  .sev3{ background:#fde68a; color:#92400e; }
+  .sev4{ background:#fecaca; color:#b91c1c; }
+  .sev5{ background:#fee2e2; color:#991b1b; font-weight:700; }
+  .action-btn{
+    padding:6px 12px; border-radius:6px; text-decoration:none; font-size:13px; margin-right:5px; border:none; cursor:pointer;
+  }
+  .btn-success{ background:#10b981; color:white; }
+  .btn-warning{ background:#f59e0b; color:white; }
+  .btn-primary{ background:#3182ce; color:white; }
 
+  /* Toast */
+  .toast-container{ position:fixed; top:20px; right:20px; z-index:9999; max-width:350px; }
   .alert{
-    padding:12px 16px;
-    border-radius:8px;
-    margin-bottom:20px;
-    color:white;
-    font-weight:500;
-  }
-  .alert-warning{ background:#f39c12; }
-  .alert-error{ background:#e53e3e; border-left:4px solid #c53030; }
-
-  .toast-container{
-    position:fixed;
-    top:20px;
-    right:20px;
-    z-index:9999;
-    max-width:350px;
-  }
-  .alert-toast{
     padding:12px 16px;
     border-radius:8px;
     margin-bottom:10px;
@@ -375,16 +307,23 @@ function formatDate($datetime) {
     animation:slideIn 0.3s;
   }
   .alert-success{ background:#001F3F; border-left:4px solid #003366; }
+  .alert-error{ background:#e53e3e; border-left:4px solid #c53030; }
   @keyframes slideIn{
     from{ transform:translateX(100%); opacity:0; }
     to{ transform:translateX(0); opacity:1; }
+  }
+
+  @media (max-width:780px){
+    .sidebar{ left:-320px; }
+    .sidebar.open{ left:0; }
+    .main{ margin-left:0; padding:12px; }
   }
 </style>
 </head>
 <body>
 <div class="app">
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
+  <!-- SIDEBAR (same as patients.php) -->
+  <aside class="sidebar" id="sidebar">
     <div class="logo-wrap"><a href="dashboard.php"><img src="logo.jpg" alt="Logo"></a></div>
     <div class="user-info">
       <h4>Logged as:</h4>
@@ -426,143 +365,94 @@ function formatDate($datetime) {
   <div class="main">
     <div class="topbar">
       <div class="top-left">
-        <h1>View Inventory Item
-          <span class="role-badge role-<?= strtolower($current_role) ?>"><?= htmlspecialchars($current_role) ?> View</span>
-        </h1>
-        <p>Item details and usage history</p>
+        <h1>Triage Queue</h1>
+        <p>Manage patient flow – Gig Oca Robles Seamen's Hospital Davao</p>
       </div>
       <div class="top-actions">
-        <a href="inventory.php" class="btn btn-outline">&larr; Back to Inventory</a>
-        <?php if (!$is_archived || $is_admin || $is_inventory): ?>
-          <a href="inventory_form.php?id=<?= $id ?>" class="btn" style="background:#ed8936;">Update Item</a>
-        <?php endif; ?>
+        <a href="patients.php" class="btn btn-outline">← Back to Patients</a>
         <div class="date-pill"><?= date('l, jS F Y') ?></div>
       </div>
     </div>
 
-    <div id="toast" class="toast-container"></div>
-
-    <div class="item-card">
-      <div class="item-header">
-        <h3>Item #<?= $item['id'] ?></h3>
-        <div>
-          <span class="status <?= $stock_status ?>"><?= $status_text ?></span>
-          <?php if ($is_archived): ?>
-            <span class="status archived" style="margin-left:8px;">Archived</span>
-          <?php endif; ?>
-        </div>
+    <?php if (isset($_GET['success'])): ?>
+      <div style="background:#d1fae5; padding:10px; border-radius:8px; margin-bottom:20px;">
+        Patient added to queue with number <?= htmlspecialchars($_GET['queue'] ?? '') ?>
       </div>
+    <?php endif; ?>
 
-      <?php if ($is_archived && !empty($item['archived_at'])): ?>
-        <div class="alert alert-warning" style="margin-bottom:20px;">
-          <strong>⚠️ This item is archived</strong><br>
-          Archived on: <?= formatDate($item['archived_at']) ?><br>
-          <?php if (!empty($item['archived_by_name'])): ?>
-            Archived by: <?= htmlspecialchars($item['archived_by_name']) ?>
-          <?php endif; ?>
-        </div>
-      <?php endif; ?>
-
-      <div class="info-grid">
-        <div class="info-group">
-          <div class="info-label">Item Name</div>
-          <div class="info-value"><?= htmlspecialchars($item['item_name']) ?></div>
-        </div>
-        <div class="info-group">
-          <div class="info-label">Category</div>
-          <div class="info-value"><?= htmlspecialchars($item['category'] ?? 'N/A') ?></div>
-        </div>
-        <div class="info-group">
-          <div class="info-label">Current Quantity</div>
-          <div class="info-value"><?= $item['quantity'] ?> <?= htmlspecialchars($item['unit'] ?? '') ?></div>
-        </div>
-        <div class="info-group">
-          <div class="info-label">Low Stock Threshold</div>
-          <div class="info-value"><?= $item['threshold'] ?> <?= htmlspecialchars($item['unit'] ?? '') ?></div>
-        </div>
-        <div class="info-group">
-          <div class="info-label">Unit</div>
-          <div class="info-value"><?= htmlspecialchars($item['unit'] ?? 'N/A') ?></div>
-        </div>
-        <div class="info-group">
-          <div class="info-label">Last Updated</div>
-          <div class="info-value"><?= formatDate($item['updated_at'] ?? '') ?></div>
-        </div>
-      </div>
-
-      <?php if (!empty($surgery_usage)): ?>
-      <div class="section-title">Usage in Surgeries</div>
-      <div style="overflow-x:auto;">
-        <table class="usage-table">
+    <!-- Waiting Patients -->
+    <div class="queue-section">
+      <h3>Waiting (<?= count($waiting) ?>)</h3>
+      <?php if (count($waiting) > 0): ?>
+        <table>
           <thead>
             <tr>
-              <th>Surgery ID</th>
-              <th>Surgery Type</th>
-              <th>Date</th>
-              <th>Quantity Used</th>
+              <th>Queue #</th>
+              <th>Patient</th>
+              <th>Severity</th>
+              <th>Chief Complaint</th>
+              <th>Wait (min)</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            <?php foreach($surgery_usage as $usage): ?>
+            <?php foreach ($waiting as $w): ?>
               <tr>
-                <td>S-<?= $usage['id'] ?></td>
-                <td><?= htmlspecialchars($usage['surgery_type']) ?></td>
-                <td><?= date('M j, Y', strtotime($usage['schedule_date'])) ?></td>
-                <td><?= $usage['quantity_used'] ?> <?= htmlspecialchars($item['unit'] ?? '') ?></td>
+                <td><?= htmlspecialchars($w['queue_number']) ?></td>
+                <td><?= htmlspecialchars($w['first_name'] . ' ' . $w['last_name']) ?></td>
+                <td><span class="severity-badge sev<?= $w['severity'] ?>"><?= $w['severity'] ?></span></td>
+                <td><?= htmlspecialchars($w['chief_complaint']) ?></td>
+                <td><?= $w['wait_minutes'] ?></td>
+                <td>
+                  <?php if ($_SESSION['role'] === 'Doctor' || $_SESSION['role'] === 'Admin'): ?>
+                    <a href="triage_queue.php?start=<?= $w['id'] ?>" class="action-btn btn-success" onclick="return confirm('Start consultation?')">Start</a>
+                  <?php endif; ?>
+                  <a href="patient_view.php?id=<?= $w['patient_id'] ?>" class="action-btn btn-primary">View</a>
+                </td>
               </tr>
             <?php endforeach; ?>
           </tbody>
         </table>
-      </div>
       <?php else: ?>
-        <p style="color: var(--muted);">No usage recorded for this item.</p>
+        <p>No patients waiting.</p>
       <?php endif; ?>
-
-      <div class="item-header" style="margin-top:30px; border-top:1px solid #eef2f7; padding-top:20px;">
-        <h3>Actions</h3>
-      </div>
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <a href="inventory.php" class="btn" style="background:#6c757d;">Back to List</a>
-        <?php if (!$is_archived || $is_admin || $is_inventory): ?>
-          <a href="inventory_form.php?id=<?= $id ?>" class="btn" style="background:#ed8936;">Update Item</a>
-        <?php endif; ?>
-        <?php if (($is_admin || $is_inventory) && $has_archive_columns): ?>
-          <?php if ($is_archived): ?>
-            <a href="inventory.php?restore=<?= $id ?>" class="btn" style="background:#95a5a6;" onclick="return confirm('Restore this item?')">Restore Item</a>
-          <?php else: ?>
-            <a href="inventory.php?archive=<?= $id ?>" class="btn" style="background:#7f8c8d;" onclick="return confirm('Archive this item?')">Archive Item</a>
-          <?php endif; ?>
-        <?php endif; ?>
-      </div>
     </div>
+
+    <!-- In Consultation (filtered if doctor) -->
+    <?php if (count($in_consult) > 0): ?>
+    <div class="queue-section">
+      <h3>In Consultation <?= ($current_role === 'Doctor') ? '(Your patients)' : '' ?></h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Queue #</th>
+            <th>Patient</th>
+            <th>Severity</th>
+            <th>Chief Complaint</th>
+            <th>Doctor</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($in_consult as $c): ?>
+            <tr>
+              <td><?= htmlspecialchars($c['queue_number']) ?></td>
+              <td><?= htmlspecialchars($c['first_name'] . ' ' . $c['last_name']) ?></td>
+              <td><span class="severity-badge sev<?= $c['severity'] ?>"><?= $c['severity'] ?></span></td>
+              <td><?= htmlspecialchars($c['chief_complaint']) ?></td>
+              <td><?= htmlspecialchars($c['doctor_name'] ?? 'Not assigned') ?></td>
+              <td>
+                <?php if ($_SESSION['role'] === 'Doctor' || $_SESSION['role'] === 'Admin'): ?>
+                  <a href="triage_queue.php?complete=<?= $c['id'] ?>" class="action-btn btn-warning" onclick="return confirm('Mark as completed?')">Complete</a>
+                <?php endif; ?>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
   </div>
 </div>
-
-<script>
-function showToast(msg, type = 'success') {
-  const container = document.getElementById('toast');
-  if (!container) return;
-  const toast = document.createElement('div');
-  toast.className = `alert-toast alert-${type}`;
-  toast.innerHTML = `<div style="display:flex; justify-content:space-between;">${msg}<button onclick="this.parentElement.parentElement.remove()" style="background:none; border:none; color:white;">&times;</button></div>`;
-  container.appendChild(toast);
-  setTimeout(() => toast.remove(), 5000);
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const success = urlParams.get('success');
-  const message = urlParams.get('message');
-  if (success) {
-    const msg = {
-      updated: 'Item updated successfully!',
-      archived: 'Item archived.',
-      restored: 'Item restored.',
-      error: message || 'An error occurred.'
-    }[success] || 'Operation completed.';
-    showToast(msg, success === 'error' ? 'error' : 'success');
-  }
-});
-</script>
 </body>
 </html>

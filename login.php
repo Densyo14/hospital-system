@@ -1,6 +1,7 @@
 <?php
 session_start();
 require 'config.php';
+require 'login_audit_helper.php';
 
 $error = "";
 $username = "";
@@ -10,9 +11,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
     $username = trim($_POST['username'] ?? '');
     $password = trim($_POST['password'] ?? '');
+    $ip = $_SERVER['REMOTE_ADDR'];  // Get client IP address
 
     if (empty($username) || empty($password)) {
         $error = "Please enter your username/email and password.";
+        // Optionally log empty submission? Usually not.
     } else {
 
         $stmt = $conn->prepare("SELECT id, full_name, username, password, role, is_active 
@@ -27,35 +30,47 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
             if (!$row['is_active']) {
                 $error = "Your account is deactivated. Contact admin.";
+                // Log failed attempt (deactivated account)
+                logLoginAttempt($conn, $username, null, 'Failed');
             } else if (password_verify($password, $row['password'])) {
 
+                // Login successful
                 $_SESSION['user_id'] = $row['id'];
                 $_SESSION['role'] = $row['role'];
                 $_SESSION['name'] = $row['full_name'];
                 $_SESSION['username'] = $row['username'];
 
+                // Log successful login
+                logLoginAttempt($conn, $row['username'], $row['id'], 'Success');
+
                 header("Location: dashboard.php");
                 exit();
             } else {
                 $error = "Incorrect password.";
+                // Log failed attempt (wrong password)
+                logLoginAttempt($conn, $username, null, 'Failed');
             }
         } else {
             $error = "Account not found.";
+            // Log failed attempt (user not found)
+            logLoginAttempt($conn, $username, null, 'Failed');
         }
 
         $stmt->close();
     }
 }
+
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Tebow CURE Hospital – Login</title>
+<title>Seamen's Hospital – Login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <style>
-
+/* (Your existing CSS – unchanged) */
 *{
   margin:0;
   padding:0;
@@ -72,7 +87,6 @@ body{
   background:#000;
 }
 
-/* Background image */
 .background{
   position:fixed;
   inset:0;
@@ -81,7 +95,6 @@ body{
   z-index:-1;
 }
 
-/* Glass card */
 .login-container{
   width:420px;
   padding:40px 35px;
@@ -94,13 +107,11 @@ body{
   border:1px solid rgba(255,255,255,0.1);
 }
 
-/* Logo */
 .logo{
   width:75px;
   margin-bottom:10px;
 }
 
-/* Title */
 h2{
   color:#fff;
   font-size:26px;
@@ -108,7 +119,6 @@ h2{
   margin-bottom:30px;
 }
 
-/* Error box */
 .error{
   background:rgba(255,75,75,0.15);
   color:#ffdcdc;
@@ -118,7 +128,6 @@ h2{
   font-size:14px;
 }
 
-/* Inputs */
 input{
   width:100%;
   padding:14px;
@@ -133,7 +142,6 @@ input:focus{
   box-shadow:0 0 0 3px rgba(0, 40, 85, 0.4);
 }
 
-/* Button */
 .login-btn{
   width:100%;
   padding:14px;
@@ -152,7 +160,6 @@ input:focus{
   background:linear-gradient(90deg, #002855, #004080, #003366);
 }
 
-/* Forgot */
 .forgot{
   margin-top:14px;
 }
@@ -166,7 +173,6 @@ input:focus{
   color:#c2e0ff;
 }
 
-/* Footer */
 .footer{
   margin-top:20px;
   font-size:12px;
@@ -184,7 +190,7 @@ input:focus{
 
     <img src="logo.jpg" class="logo" alt="CURE Logo">
 
-    <h2>Welcome to Tebow<br>CURE Hospital</h2>
+    <h2>Welcome to <br>Gig Oca Robles Seamen's Hospital Davao</h2>
 
     <?php if(!empty($error)): ?>
         <div class="error"><?php echo htmlspecialchars($error); ?></div>
@@ -200,7 +206,7 @@ input:focus{
     </form>
        
     <div class="footer">
-        <a style="color: rgba(255,255,255,0.7);">Tebow CURE Children's Hospital. All rights reserved.</a>
+        <a style="color: rgba(255,255,255,0.7);">GIG Oca Robles Seamen's Hospital. All rights reserved.</a>
     </div>
 
 </div>
