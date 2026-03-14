@@ -69,18 +69,32 @@ $role_permissions = [
 
 $allowed_pages = $role_permissions[$current_role] ?? ['dashboard.php' => 'Dashboard'];
 
-// Initialize variables
+// Initialize variables with default values
 $id = $patient_id = $doctor_id = $schedule_datetime = $reason = $notes = "";
 $status = "Pending";
 $edit = false;
 $error_message = "";
+$success_message = "";
 
 // Get patients and doctors
 $patients = fetchAll($conn, "SELECT id, CONCAT(first_name, ' ', last_name) as full_name, patient_code FROM patients WHERE is_archived = 0 ORDER BY last_name, first_name");
 $doctors = fetchAll($conn, "SELECT id, full_name FROM users WHERE role = 'Doctor' AND is_active = 1 ORDER BY full_name");
 
-// Check if editing
-if (isset($_GET['id'])) {
+// Check if we're restoring from a previous POST (validation errors)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
+    // Restore form values from POST data
+    $id = (int)($_POST['id'] ?? 0);
+    $patient_id = (int)($_POST['patient_id'] ?? 0);
+    $doctor_id = (int)($_POST['doctor_id'] ?? 0);
+    $schedule_datetime = trim($_POST['schedule_datetime'] ?? '');
+    $reason = trim($_POST['reason'] ?? '');
+    $notes = trim($_POST['notes'] ?? '');
+    $status = trim($_POST['status'] ?? 'Pending');
+    $edit = ($id > 0);
+}
+
+// Check if editing (GET request)
+if (!$edit && isset($_GET['id'])) {
     $id = (int)$_GET['id'];
     $appointment = fetchOne($conn, "SELECT * FROM appointments WHERE id = ?", "i", [$id]);
     if ($appointment) {
@@ -91,11 +105,21 @@ if (isset($_GET['id'])) {
         $reason = $appointment['reason'] ?? '';
         $notes = $appointment['notes'] ?? '';
         $status = $appointment['status'] ?? 'Pending';
+        
+        // Check if user has permission to edit this appointment
+        if ($current_role === 'Doctor' && $doctor_id != $current_user_id) {
+            header("Location: appointments.php?error=You can only edit your own appointments");
+            exit();
+        }
+    } else {
+        header("Location: appointments.php?error=Appointment not found");
+        exit();
     }
 }
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['form_submitted'])) {
+    // Get form data (already restored above, but get again to be safe)
     $id = (int)($_POST['id'] ?? 0);
     $patient_id = (int)($_POST['patient_id'] ?? 0);
     $doctor_id = (int)($_POST['doctor_id'] ?? 0);
@@ -103,65 +127,114 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reason_text = trim($_POST['reason'] ?? '');
     $notes = trim($_POST['notes'] ?? '');
     $new_status = trim($_POST['status'] ?? 'Pending');
-    $status_reason = trim($_POST['status_reason'] ?? ''); // reason for cancel/complete
+    $status_reason = trim($_POST['status_reason'] ?? '');
 
+    // Validate input
     $errors = [];
-
-    if (empty($patient_id)) $errors[] = "Please select a patient.";
-    if (empty($doctor_id)) $errors[] = "Please select a doctor.";
-    if (empty($schedule_datetime)) $errors[] = "Please select a schedule date and time.";
-    else {
+    
+    if (empty($patient_id)) {
+        $errors[] = "Please select a patient.";
+    }
+    
+    if (empty($doctor_id)) {
+        $errors[] = "Please select a doctor.";
+    }
+    
+    if (empty($schedule_datetime)) {
+        $errors[] = "Please select a schedule date and time.";
+    } else {
         $schedule_time = strtotime($schedule_datetime);
-        if ($schedule_time < time()) $errors[] = "Schedule cannot be in the past.";
-    }
-    if (empty($reason_text)) $errors[] = "Please provide a reason for the appointment.";
-
-    // If editing, check status change permissions
-    if ($id) {
-        $current_appt = fetchOne($conn, "SELECT status FROM appointments WHERE id = ?", "i", [$id]);
-        $current_status = $current_appt['status'] ?? 'Pending';
-
-        // Determine if user can change status
-        $appt_doctor = fetchOne($conn, "SELECT doctor_id FROM appointments WHERE id = ?", "i", [$id])['doctor_id'];
-        $is_owner = ($appt_doctor == $current_user_id);
-        $can_approve = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner);
-        $can_cancel  = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
-                       ($current_role === 'Nurse') || ($current_role === 'Staff');
-        $can_complete = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
-                        ($current_role === 'Nurse');
-
-        // Validate allowed transitions
-        $allowed = [];
-        if ($current_status === 'Pending') {
-            if ($can_approve) $allowed[] = 'Approved';
-            if ($can_cancel) $allowed[] = 'Cancelled';
-        } elseif ($current_status === 'Approved') {
-            if ($can_complete) $allowed[] = 'Completed';
-            if ($can_cancel) $allowed[] = 'Cancelled';
-        } else {
-            // Completed or Cancelled – no changes allowed
-            $allowed = [$current_status];
-        }
-
-        if (!in_array($new_status, $allowed)) {
-            $errors[] = "Invalid status change.";
-        }
-
-        // If changing to Cancelled or Completed, reason is required
-        if (($new_status === 'Cancelled' || $new_status === 'Completed') && empty($status_reason)) {
-            $errors[] = "Please provide a reason for " . strtolower($new_status) . ".";
+        $current_time = time();
+        if ($schedule_time < $current_time - 300) { // Allow 5 minutes grace period
+            $errors[] = "Schedule cannot be in the past.";
         }
     }
+    
+    if (empty($reason_text)) {
+        $errors[] = "Please provide a reason for the appointment.";
+    }
 
+    // Check for scheduling conflicts (excluding current appointment if editing)
     if (empty($errors)) {
-        if ($id) {
-            // Update appointment details (always allowed)
+        $conflict_query = "SELECT id FROM appointments WHERE doctor_id = ? AND schedule_datetime = ? AND is_archived = 0";
+        $params = [$doctor_id, $schedule_datetime];
+        $types = "is";
+        
+        if ($id > 0) {
+            $conflict_query .= " AND id != ?";
+            $params[] = $id;
+            $types .= "i";
+        }
+        
+        $conflict = fetchOne($conn, $conflict_query, $types, $params);
+        if ($conflict) {
+            $errors[] = "This doctor already has an appointment scheduled at this time.";
+        }
+    }
+
+    // If editing, validate status change
+    if ($id > 0) {
+        $current_appt = fetchOne($conn, "SELECT status, doctor_id FROM appointments WHERE id = ?", "i", [$id]);
+        if ($current_appt) {
+            $current_status = $current_appt['status'];
+            $appt_doctor = $current_appt['doctor_id'];
+            
+            // Check if status is being changed
+            if ($new_status !== $current_status) {
+                $is_owner = ($appt_doctor == $current_user_id);
+                
+                // Define permissions
+                $can_approve = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner);
+                $can_cancel = ($current_role === 'Admin') || 
+                             ($current_role === 'Doctor' && $is_owner) ||
+                             ($current_role === 'Nurse') || 
+                             ($current_role === 'Staff');
+                $can_complete = ($current_role === 'Admin') || 
+                               ($current_role === 'Doctor' && $is_owner) ||
+                               ($current_role === 'Nurse');
+
+                // Validate allowed transitions
+                $allowed = false;
+                if ($current_status === 'Pending') {
+                    if ($new_status === 'Approved' && $can_approve) $allowed = true;
+                    if ($new_status === 'Cancelled' && $can_cancel) $allowed = true;
+                } elseif ($current_status === 'Approved') {
+                    if ($new_status === 'Completed' && $can_complete) $allowed = true;
+                    if ($new_status === 'Cancelled' && $can_cancel) $allowed = true;
+                } elseif ($current_status === 'Completed' || $current_status === 'Cancelled') {
+                    $errors[] = "Cannot change status of completed or cancelled appointments.";
+                }
+
+                if (!$allowed && $new_status !== $current_status) {
+                    $errors[] = "You don't have permission to change status to " . $new_status;
+                }
+
+                // If changing to Cancelled or Completed, reason is required
+                if (($new_status === 'Cancelled' || $new_status === 'Completed') && empty($status_reason)) {
+                    $errors[] = "Please provide a reason for " . strtolower($new_status) . ".";
+                }
+            }
+        }
+    }
+
+    // If no errors, proceed with save/update
+    if (empty($errors)) {
+        if ($id > 0) {
+            // First update the basic appointment details
+            $sql = "UPDATE appointments SET 
+                    patient_id = ?, 
+                    doctor_id = ?, 
+                    schedule_datetime = ?, 
+                    reason = ?, 
+                    notes = ? 
+                    WHERE id = ?";
+            
             $params = [$patient_id, $doctor_id, $schedule_datetime, $reason_text, $notes, $id];
             $types = "iisssi";
-            $sql = "UPDATE appointments SET patient_id=?, doctor_id=?, schedule_datetime=?, reason=?, notes=? WHERE id=?";
+            
             $result = execute($conn, $sql, $types, $params);
-
-            // If status changed, apply with tracking
+            
+            // Then handle status change if needed
             if ($new_status !== $current_status) {
                 if ($new_status === 'Approved') {
                     execute($conn, "UPDATE appointments SET status = 'Approved', approved_by = ?, approved_at = NOW() WHERE id = ?", "ii", [$current_user_id, $id]);
@@ -171,20 +244,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     execute($conn, "UPDATE appointments SET status = 'Completed', completed_by = ?, completed_at = NOW(), completion_reason = ? WHERE id = ?", "isi", [$current_user_id, $status_reason, $id]);
                 }
             }
-            $appointment_id = $id;
+            
             $action = 'updated';
         } else {
             // Insert new appointment
-            $params = [$patient_id, $doctor_id, $schedule_datetime, $reason_text, $notes, 'Pending', $_SESSION['user_id']];
-            $types = "iissssi";
-            $sql = "INSERT INTO appointments (patient_id, doctor_id, schedule_datetime, reason, notes, status, created_by) VALUES (?,?,?,?,?,?,?)";
+            $sql = "INSERT INTO appointments (patient_id, doctor_id, schedule_datetime, reason, notes, status, created_by, created_at) 
+                    VALUES (?, ?, ?, ?, ?, 'Pending', ?, NOW())";
+            
+            $params = [$patient_id, $doctor_id, $schedule_datetime, $reason_text, $notes, $current_user_id];
+            $types = "iisssi";
+            
             $result = execute($conn, $sql, $types, $params);
-            $appointment_id = $conn->insert_id;
+            $id = $conn->insert_id;
             $action = 'added';
         }
 
         if (!isset($result['error'])) {
-            header("Location: appointments.php?success=$action&appointment_id=$appointment_id");
+            header("Location: appointments.php?success=$action&appointment_id=$id");
             exit();
         } else {
             $error_message = "<div class='alert alert-error mt-2'>Error: " . $result['error'] . "</div>";
@@ -215,6 +291,11 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
     }
     return $allowed;
 }
+
+// Helper function to safely get value for select options
+function selected($value1, $value2) {
+    return ($value1 == $value2) ? 'selected' : '';
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -224,7 +305,7 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
 <title><?= $edit ? "Edit Appointment" : "Add Appointment" ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Same styles as before, plus new ones for status reason */
+  /* Same styles as before */
   :root{
     --bg: #eef3f7;
     --panel: #ffffff;
@@ -318,6 +399,7 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
     display:inline-block;
     transition:all 0.2s;
     font-size:13px;
+    cursor:pointer;
   }
   .btn:hover{ background:var(--accent); transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,31,63,0.2); }
   .btn-outline {
@@ -407,59 +489,17 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
     border-radius:8px;
   }
 
-  /* Searchable select */
-  .searchable-select{ position:relative; }
-  .search-input{
-    width:100%;
-    padding:10px 12px;
-    border:1px solid #e6eef0;
-    border-radius:8px;
-    margin-bottom:5px;
-    background:#fff;
+  /* Error highlight */
+  .form-control.error, .form-select.error, .form-textarea.error {
+    border-color: #e53e3e;
+    background-color: #fff5f5;
   }
-  .dropdown-list{
-    position:absolute;
-    top:100%;
-    left:0;
-    right:0;
-    max-height:200px;
-    overflow-y:auto;
-    background:white;
-    border:1px solid #e6eef0;
-    border-radius:8px;
-    box-shadow:0 4px 12px rgba(0,0,0,0.1);
-    z-index:1000;
-    display:none;
+  
+  .field-error {
+    color: #e53e3e;
+    font-size: 12px;
+    margin-top: 4px;
   }
-  .dropdown-list.show{ display:block; }
-  .dropdown-item{
-    padding:10px 12px;
-    cursor:pointer;
-    transition:background 0.2s;
-  }
-  .dropdown-item:hover{ background:#f8fbfd; }
-  .dropdown-item.selected{
-    background:#e8f4ff;
-    color:var(--navy-700);
-    font-weight:600;
-  }
-  .selected-display{
-    width:100%;
-    padding:10px 12px;
-    border:1px solid #e6eef0;
-    border-radius:8px;
-    background:#fff;
-    cursor:pointer;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-  }
-  .selected-display::after{
-    content:"▼";
-    font-size:12px;
-    color:var(--muted);
-  }
-  .hidden-select{ display:none; }
 
   .status-pill {
     display:inline-block;
@@ -494,6 +534,18 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
     font-weight:500;
   }
   .alert-error{ background:#e53e3e; border-left:4px solid #c53030; }
+  .alert-success{ background:#001F3F; border-left:4px solid #003366; }
+  .alert-warning{ background:#f59e0b; color:#000; border-left:4px solid #d97706; }
+
+  /* Patient highlight */
+  .patient-highlight {
+    background-color: #f0f9ff;
+    border-left: 4px solid var(--navy-700);
+    padding: 12px 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-weight: 500;
+  }
 
   @media (max-width:780px){
     .sidebar{ left:-320px; }
@@ -564,70 +616,42 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
       <?php if(isset($error_message)) echo $error_message; ?>
     </div>
 
+    <?php if ($edit && $patient_id > 0): ?>
+   
+    <?php endif; ?>
+
     <div class="form-card">
       <form method="POST" onsubmit="return validateForm()">
-        <input type="hidden" name="id" value="<?= h($id) ?>">
+        <input type="hidden" name="form_submitted" value="1">
+        <input type="hidden" name="id" value="<?= htmlspecialchars($id) ?>">
 
         <!-- Patient -->
         <div class="form-group">
           <label class="form-label required">Patient</label>
-          <div class="searchable-select">
-            <select name="patient_id" class="hidden-select" required>
-              <option value="">Select Patient</option>
-              <?php
-              $selected_patient_text = '';
-              foreach($patients as $patient):
-                $selected = $patient_id == $patient['id'];
-                if ($selected) $selected_patient_text = h($patient['full_name']) . " (" . h($patient['patient_code']) . ")";
-              ?>
-                <option value="<?= h($patient['id']) ?>" <?= $selected ? 'selected' : '' ?> data-display="<?= h($patient['full_name'] . " (" . $patient['patient_code'] . ")") ?>">
-                  <?= h($patient['full_name']) ?> (<?= h($patient['patient_code']) ?>)
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <div class="selected-display" onclick="toggleDropdown('patient')" id="patient-display">
-              <?= $selected_patient_text ?: 'Select Patient' ?>
-            </div>
-            <input type="text" class="search-input" placeholder="Search patients..." onkeyup="filterOptions('patient')" id="patient-search">
-            <div class="dropdown-list" id="patient-list">
-              <?php foreach($patients as $patient): ?>
-                <div class="dropdown-item" data-value="<?= h($patient['id']) ?>" onclick="selectOption('patient', this)" <?= $patient_id == $patient['id'] ? 'data-selected="true"' : '' ?>>
-                  <?= h($patient['full_name']) ?> (<?= h($patient['patient_code']) ?>)
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
+          <select name="patient_id" id="patient_select" class="form-select" required>
+            <option value="">Select Patient</option>
+            <?php foreach($patients as $patient): ?>
+              <option value="<?= htmlspecialchars($patient['id']) ?>" <?= selected($patient_id, $patient['id']) ?>>
+                <?= htmlspecialchars($patient['full_name']) ?> (<?= htmlspecialchars($patient['patient_code']) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <?php if ($edit && $patient_id > 0): ?>
+          <small class="field-error" id="patient_error" style="display:none;">Patient selection is required</small>
+          <?php endif; ?>
         </div>
 
         <!-- Doctor -->
         <div class="form-group">
           <label class="form-label required">Doctor</label>
-          <div class="searchable-select">
-            <select name="doctor_id" class="hidden-select" required>
-              <option value="">Select Doctor</option>
-              <?php
-              $selected_doctor_text = '';
-              foreach($doctors as $doctor):
-                $selected = $doctor_id == $doctor['id'];
-                if ($selected) $selected_doctor_text = h($doctor['full_name']);
-              ?>
-                <option value="<?= h($doctor['id']) ?>" <?= $selected ? 'selected' : '' ?> data-display="<?= h($doctor['full_name']) ?>">
-                  <?= h($doctor['full_name']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <div class="selected-display" onclick="toggleDropdown('doctor')" id="doctor-display">
-              <?= $selected_doctor_text ?: 'Select Doctor' ?>
-            </div>
-            <input type="text" class="search-input" placeholder="Search doctors..." onkeyup="filterOptions('doctor')" id="doctor-search">
-            <div class="dropdown-list" id="doctor-list">
-              <?php foreach($doctors as $doctor): ?>
-                <div class="dropdown-item" data-value="<?= h($doctor['id']) ?>" onclick="selectOption('doctor', this)" <?= $doctor_id == $doctor['id'] ? 'data-selected="true"' : '' ?>>
-                  <?= h($doctor['full_name']) ?>
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
+          <select name="doctor_id" class="form-select" required>
+            <option value="">Select Doctor</option>
+            <?php foreach($doctors as $doctor): ?>
+              <option value="<?= htmlspecialchars($doctor['id']) ?>" <?= selected($doctor_id, $doctor['id']) ?>>
+                <?= htmlspecialchars($doctor['full_name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
 
         <!-- Schedule -->
@@ -642,13 +666,13 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
         <!-- Reason -->
         <div class="form-group">
           <label class="form-label required">Reason</label>
-          <textarea name="reason" class="form-textarea" rows="3" placeholder="Enter reason for appointment" required><?= h($reason) ?></textarea>
+          <textarea name="reason" class="form-textarea" rows="3" placeholder="Enter reason for appointment" required><?= htmlspecialchars($reason) ?></textarea>
         </div>
 
         <!-- Notes -->
         <div class="form-group">
           <label class="form-label">Notes</label>
-          <textarea name="notes" class="form-textarea" rows="3" placeholder="Additional notes about the appointment"><?= h($notes) ?></textarea>
+          <textarea name="notes" class="form-textarea" rows="3" placeholder="Additional notes about the appointment"><?= htmlspecialchars($notes) ?></textarea>
         </div>
 
         <!-- Status (only when editing) -->
@@ -660,28 +684,29 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
           <label class="form-label">Change Status</label>
           <?php if (!empty($allowed_statuses)): ?>
             <select name="status" id="statusSelect" class="form-select">
-              <option value="<?= $status ?>" selected><?= $status ?></option>
+              <option value="<?= htmlspecialchars($status) ?>" selected>Current: <?= htmlspecialchars($status) ?></option>
               <?php foreach ($allowed_statuses as $val => $label): ?>
-                <option value="<?= $val ?>"><?= $label ?></option>
+                <option value="<?= htmlspecialchars($val) ?>">Change to: <?= htmlspecialchars($label) ?></option>
               <?php endforeach; ?>
             </select>
           <?php else: ?>
             <div class="readonly-status">
-              <span class="status-pill <?= strtolower($status) ?>"><?= $status ?></span>
+              <span class="status-pill <?= strtolower($status) ?>"><?= htmlspecialchars($status) ?></span>
               <small class="muted"> (Cannot be changed)</small>
+              <input type="hidden" name="status" value="<?= htmlspecialchars($status) ?>">
             </div>
           <?php endif; ?>
 
           <!-- Reason field for Cancel/Complete -->
           <div id="statusReasonGroup" class="form-group reason-field">
-            <label for="status_reason">Reason for change:</label>
+            <label for="status_reason" class="form-label required">Reason for change:</label>
             <textarea name="status_reason" id="status_reason" class="form-textarea" rows="2" placeholder="Enter reason..."></textarea>
           </div>
         </div>
         <?php endif; ?>
 
         <div class="form-actions">
-          <button type="submit" class="btn"><?= $edit ? "Update" : "Add" ?> Appointment</button>
+          <button type="submit" class="btn" id="submitBtn"><?= $edit ? "Update" : "Add" ?> Appointment</button>
           <a href="appointments.php" class="btn btn-secondary">Cancel</a>
         </div>
       </form>
@@ -690,129 +715,107 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
 </div>
 
 <script>
-let openDropdown = null;
-
-function toggleDropdown(type) {
-  const list = document.getElementById(`${type}-list`);
-  const search = document.getElementById(`${type}-search`);
-  const display = document.getElementById(`${type}-display`);
-
-  if (openDropdown && openDropdown !== list) {
-    openDropdown.classList.remove('show');
-  }
-
-  if (list.classList.contains('show')) {
-    list.classList.remove('show');
-    openDropdown = null;
-  } else {
-    list.classList.add('show');
-    openDropdown = list;
-    search.focus();
-  }
-
-  document.addEventListener('click', function closeDropdown(e) {
-    if (!list.contains(e.target) && e.target !== display) {
-      list.classList.remove('show');
-      openDropdown = null;
-      document.removeEventListener('click', closeDropdown);
-    }
-  });
-}
-
-function filterOptions(type) {
-  const search = document.getElementById(`${type}-search`);
-  const list = document.getElementById(`${type}-list`);
-  const items = list.getElementsByClassName('dropdown-item');
-  const filter = search.value.toUpperCase();
-
-  for (let i = 0; i < items.length; i++) {
-    const text = items[i].textContent || items[i].innerText;
-    items[i].style.display = text.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
-  }
-}
-
-function selectOption(type, element) {
-  const value = element.getAttribute('data-value');
-  const text = element.textContent;
-  const display = document.getElementById(`${type}-display`);
-  const hiddenSelect = document.querySelector(`select[name="${type}_id"]`);
-
-  display.textContent = text;
-  hiddenSelect.value = value;
-
-  const items = document.getElementById(`${type}-list`).getElementsByClassName('dropdown-item');
-  for (let i = 0; i < items.length; i++) {
-    items[i].classList.remove('selected');
-    items[i].removeAttribute('data-selected');
-  }
-  element.classList.add('selected');
-  element.setAttribute('data-selected', 'true');
-
-  document.getElementById(`${type}-list`).classList.remove('show');
-  openDropdown = null;
-}
-
 // Show/hide reason field when status changes
 document.addEventListener('DOMContentLoaded', function() {
   const statusSelect = document.getElementById('statusSelect');
   const reasonGroup = document.getElementById('statusReasonGroup');
+  
   if (statusSelect && reasonGroup) {
     function toggleReason() {
       const val = statusSelect.value;
+      // Only show reason field for Cancel or Complete
       if (val === 'Cancelled' || val === 'Completed') {
         reasonGroup.style.display = 'block';
+        document.getElementById('status_reason').required = true;
       } else {
         reasonGroup.style.display = 'none';
+        document.getElementById('status_reason').required = false;
       }
     }
     statusSelect.addEventListener('change', toggleReason);
-    toggleReason(); // initial
+    toggleReason(); // initial check
   }
 
-  // Set default datetime
+  // Set default datetime for new appointments
   const scheduleInput = document.querySelector('input[name="schedule_datetime"]');
-  if (scheduleInput && !scheduleInput.value) {
+  if (scheduleInput && !scheduleInput.value && !<?= $edit ? 'true' : 'false' ?>) {
     const now = new Date();
-    const nextHour = new Date(now.getTime() + 60 * 60 * 1000);
-    const defaultDateTime = new Date(nextHour.getTime() - nextHour.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    scheduleInput.value = defaultDateTime;
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0); // Set to 9:00 AM next day
+    
+    const year = tomorrow.getFullYear();
+    const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+    const day = String(tomorrow.getDate()).padStart(2, '0');
+    const hours = String(tomorrow.getHours()).padStart(2, '0');
+    const minutes = String(tomorrow.getMinutes()).padStart(2, '0');
+    
+    scheduleInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
-  // Highlight selected items
-  ['patient', 'doctor'].forEach(type => {
-    const items = document.getElementById(`${type}-list`).getElementsByClassName('dropdown-item');
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].getAttribute('data-selected') === 'true') {
-        items[i].classList.add('selected');
-      }
-    }
-  });
+  // Log the current patient ID to console for debugging
+  const patientSelect = document.getElementById('patient_select');
+  if (patientSelect) {
+    console.log('Current patient ID:', patientSelect.value);
+  }
 });
 
 function validateForm() {
-  const patientId = document.querySelector('select[name="patient_id"]').value;
+  const patientSelect = document.querySelector('select[name="patient_id"]');
+  const patientId = patientSelect.value;
   const doctorId = document.querySelector('select[name="doctor_id"]').value;
   const schedule = document.querySelector('input[name="schedule_datetime"]').value;
   const reason = document.querySelector('textarea[name="reason"]').value.trim();
 
-  if (!patientId) { alert('Please select a patient.'); return false; }
-  if (!doctorId) { alert('Please select a doctor.'); return false; }
-  if (!schedule) { alert('Please select a schedule date and time.'); return false; }
-  if (new Date(schedule) < new Date()) { alert('Schedule cannot be in the past.'); return false; }
-  if (!reason) { alert('Please provide a reason.'); return false; }
+  // Log values for debugging
+  console.log('Patient ID before submit:', patientId);
+  
+  if (!patientId) { 
+    alert('Please select a patient.'); 
+    patientSelect.focus();
+    patientSelect.classList.add('error');
+    return false; 
+  }
+  
+  if (!doctorId) { 
+    alert('Please select a doctor.'); 
+    document.querySelector('select[name="doctor_id"]').focus();
+    return false; 
+  }
+  
+  if (!schedule) { 
+    alert('Please select a schedule date and time.'); 
+    document.querySelector('input[name="schedule_datetime"]').focus();
+    return false; 
+  }
+  
+  const scheduleDate = new Date(schedule);
+  const now = new Date();
+  if (scheduleDate < now) { 
+    alert('Schedule cannot be in the past.'); 
+    return false; 
+  }
+  
+  if (!reason) { 
+    alert('Please provide a reason.'); 
+    document.querySelector('textarea[name="reason"]').focus();
+    return false; 
+  }
 
   // If status changed to Cancel/Complete, ensure reason is provided
   const statusSelect = document.getElementById('statusSelect');
   if (statusSelect) {
     const newStatus = statusSelect.value;
     const reasonField = document.getElementById('status_reason');
-    if ((newStatus === 'Cancelled' || newStatus === 'Completed') && (!reasonField.value.trim())) {
+    if ((newStatus === 'Cancelled' || newStatus === 'Completed') && (!reasonField.value || !reasonField.value.trim())) {
       alert('Please provide a reason for ' + newStatus.toLowerCase() + '.');
       reasonField.focus();
       return false;
     }
   }
-  return true;
+  
+  // Final confirmation
+  return confirm('Are you sure you want to save these changes?');
 }
 </script>
 </body>

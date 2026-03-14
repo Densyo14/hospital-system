@@ -388,17 +388,35 @@ $categories = fetchAll($conn, "SELECT DISTINCT category FROM inventory_items WHE
   td, th{ padding:14px; border-bottom:1px solid #f0f3f4; color:#233; }
 
   /* Status badges */
-  .status{
-    display:inline-block;
-    padding:6px 10px;
-    border-radius:16px;
-    font-weight:600;
-    font-size:13px;
-  }
-  .in-stock{ background:#dff7e8; color:#1f7b3b; }
-  .low-stock{ background:#fff8e1; color:#8a6d00; }
-  .out-of-stock{ background:#fee2e2; color:#b91c1c; }
-  .archived{ background:#95a5a6; color:white; }
+ .status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: default;
+    background: transparent;
+    transition: none;
+}
+.status:hover {
+    filter: none;
+}
+
+/* Text colors for all statuses – no backgrounds */
+.pending          { color: #b45f06; }      /* darker amber */
+.waiting          { color: #b45f06; }      /* same as pending */
+.scheduled        { color: #b45f06; }      /* optional */
+.approved         { color: #0b5e7c; }      /* darker teal */
+.completed        { color: #0d6632; }      /* darker green */
+.cancelled        { color: #a12b2b; }      /* darker red */
+.in-progress      { color: #1b6b8f; }      /* darker blue */
+.in_consultation  { color: #5e3c9c; }      /* darker purple */
+.archived         { color: #4a4f55; }      /* darker gray */
+
+/* Inventory statuses – text only */
+.in-stock         { color: #1f7b3b; }      /* green */
+.low-stock        { color: #8a6d00; }      /* amber */
+.out-of-stock     { color: #b91c1c; }      /* red */
 
   .action-btn{
     padding:6px 10px;

@@ -8,17 +8,16 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-$allowed_roles = ['Nurse', 'Doctor', 'Admin'];
+$allowed_roles = ['Nurse', 'Doctor', 'Admin', 'Staff'];
 if (!in_array($_SESSION['role'], $allowed_roles)) {
     die("Access denied.");
 }
 
-// Get current user role and name
 $current_role = $_SESSION['role'] ?? 'Guest';
 $current_name = $_SESSION['name'] ?? 'User';
 $current_user_id = $_SESSION['user_id'];
 
-// Define role permissions for navigation (same as patients.php)
+// Role permissions (keep your existing array)
 $role_permissions = [
     'Admin' => [
         'dashboard.php' => 'Dashboard',
@@ -53,7 +52,8 @@ $role_permissions = [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
-        'reports.php' => 'Reports'
+        'reports.php' => 'Reports',
+        'triage_queue.php' => 'Triage Queue'
     ],
     'Inventory' => [
         'dashboard.php' => 'Dashboard',
@@ -75,33 +75,64 @@ $role_permissions = [
 
 $allowed_pages = $role_permissions[$current_role] ?? ['dashboard.php' => 'Dashboard'];
 
-// Handle start and complete actions
-if (isset($_GET['start']) && is_numeric($_GET['start'])) {
-    $triage_id = (int)$_GET['start'];
-    $user_id = $_SESSION['user_id'];
-    execute($conn, "UPDATE triage SET status = 'in_consultation', started_by = ?, started_at = NOW() WHERE id = ?", "ii", [$user_id, $triage_id]);
-    header("Location: triage_queue.php");
-    exit();
-}
+// --- REMOVED start handler ---
+// Assignment now starts the consultation directly.
+
+// Handle complete consultation – only doctor who started or admin can complete
 if (isset($_GET['complete']) && is_numeric($_GET['complete'])) {
     $triage_id = (int)$_GET['complete'];
-    $user_id = $_SESSION['user_id'];
-    execute($conn, "UPDATE triage SET status = 'completed', completed_by = ?, completed_at = NOW() WHERE id = ?", "ii", [$user_id, $triage_id]);
+    $triage = fetchOne($conn, "SELECT started_by FROM triage WHERE id = ?", "i", [$triage_id]);
+    if ($triage && ($current_role === 'Admin' || $triage['started_by'] == $current_user_id)) {
+        $result = execute($conn, "UPDATE triage SET status = 'completed', completed_by = ?, completed_at = NOW() WHERE id = ?", "ii", [$current_user_id, $triage_id]);
+        if (is_array($result) && isset($result['error'])) {
+            $_SESSION['error_message'] = "Complete failed: " . $result['error'];
+        } else {
+            $_SESSION['success_message'] = "Consultation completed.";
+        }
+    } else {
+        $_SESSION['error_message'] = "You cannot complete this consultation.";
+    }
     header("Location: triage_queue.php");
     exit();
 }
 
-// Fetch waiting patients (all)
+// Handle assign action – now also starts the consultation
+if (isset($_GET['assign']) && is_numeric($_GET['assign']) && isset($_POST['doctor_id'])) {
+    $triage_id = (int)$_GET['assign'];
+    $doctor_id = (int)$_POST['doctor_id'];
+    
+    if (in_array($current_role, ['Nurse', 'Staff', 'Admin'])) {
+        // Update: set status = 'in_consultation', started_by = doctor_id, started_at = NOW(), assigned_doctor = doctor_id
+        $result = execute($conn, "UPDATE triage SET status = 'in_consultation', started_by = ?, started_at = NOW(), assigned_doctor = ? WHERE id = ?", "iii", [$doctor_id, $doctor_id, $triage_id]);
+        
+        if (is_array($result) && isset($result['error'])) {
+            $_SESSION['error_message'] = "Database error: " . $result['error'];
+        } elseif ($result === true || is_numeric($result)) {
+            $_SESSION['success_message'] = "Doctor assigned and consultation started successfully.";
+        } else {
+            $_SESSION['error_message'] = "Failed to assign doctor. Unknown error.";
+        }
+    } else {
+        $_SESSION['error_message'] = "You do not have permission to assign doctors.";
+    }
+    header("Location: triage_queue.php");
+    exit();
+}
+
+// Fetch waiting patients – now only those with status = 'waiting'
+// (after assignment they move to in_consultation, so they won't appear here)
 $waiting = fetchAll($conn, "
     SELECT t.*, p.first_name, p.last_name, p.patient_code,
+           u.full_name AS doctor_name,
            TIMESTAMPDIFF(MINUTE, t.assessed_at, NOW()) as wait_minutes
     FROM triage t
     JOIN patients p ON t.patient_id = p.id
+    LEFT JOIN users u ON t.assigned_doctor = u.id
     WHERE t.status = 'waiting'
     ORDER BY t.severity DESC, t.assessed_at ASC
 ");
 
-// Fetch in consultation patients – filter by doctor if role is Doctor
+// Fetch in consultation – filter by doctor if role is Doctor
 if ($current_role === 'Doctor') {
     $in_consult = fetchAll($conn, "
         SELECT t.*, p.first_name, p.last_name, p.patient_code, u.full_name AS doctor_name
@@ -109,7 +140,7 @@ if ($current_role === 'Doctor') {
         JOIN patients p ON t.patient_id = p.id
         LEFT JOIN users u ON t.started_by = u.id
         WHERE t.status = 'in_consultation' AND t.started_by = ?
-        ORDER BY t.assessed_at ASC
+        ORDER BY t.started_at ASC
     ", "i", [$current_user_id]);
 } else {
     $in_consult = fetchAll($conn, "
@@ -118,8 +149,14 @@ if ($current_role === 'Doctor') {
         JOIN patients p ON t.patient_id = p.id
         LEFT JOIN users u ON t.started_by = u.id
         WHERE t.status = 'in_consultation'
-        ORDER BY t.assessed_at ASC
+        ORDER BY t.started_at ASC
     ");
+}
+
+// Get list of active doctors for the assign dropdown
+$doctors = fetchAll($conn, "SELECT id, full_name FROM users WHERE role = 'Doctor' AND is_active = 1 ORDER BY full_name");
+if (empty($doctors)) {
+    $_SESSION['error_message'] = "No active doctors found in the system.";
 }
 ?>
 <!DOCTYPE html>
@@ -130,7 +167,7 @@ if ($current_role === 'Doctor') {
 <title>Triage Queue</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Same CSS as patients.php – include all styles from before */
+  /* === YOUR EXISTING CSS – unchanged === */
   :root{
     --bg: #eef3f7;
     --panel: #ffffff;
@@ -151,7 +188,6 @@ if ($current_role === 'Doctor') {
   }
   .app { display:flex; min-height:100vh; }
 
-  /* SIDEBAR – same as patients.php */
   .sidebar {
     width:230px;
     background:linear-gradient(180deg, var(--sidebar), #001a33 120%);
@@ -203,7 +239,6 @@ if ($current_role === 'Doctor') {
   .menu-item .icon{ width:16px; height:16px; fill:white; }
   .sidebar-bottom{ margin-top:auto; padding-top:15px; border-top:1px solid rgba(255,255,255,0.1); }
 
-  /* MAIN */
   .main{ margin-left:230px; padding:18px 28px; width:100%; }
   .topbar{
     display:flex;
@@ -322,7 +357,7 @@ if ($current_role === 'Doctor') {
 </head>
 <body>
 <div class="app">
-  <!-- SIDEBAR (same as patients.php) -->
+  <!-- SIDEBAR (same as yours) -->
   <aside class="sidebar" id="sidebar">
     <div class="logo-wrap"><a href="dashboard.php"><img src="logo.jpg" alt="Logo"></a></div>
     <div class="user-info">
@@ -374,13 +409,26 @@ if ($current_role === 'Doctor') {
       </div>
     </div>
 
+    <?php
+    // Display session messages
+    if (isset($_SESSION['success_message'])): ?>
+      <div style="background:#d1fae5; padding:10px; border-radius:8px; margin-bottom:20px;">
+        <?= htmlspecialchars($_SESSION['success_message']); unset($_SESSION['success_message']); ?>
+      </div>
+    <?php endif; ?>
+    <?php if (isset($_SESSION['error_message'])): ?>
+      <div style="background:#fee2e2; padding:10px; border-radius:8px; margin-bottom:20px;">
+        <?= htmlspecialchars($_SESSION['error_message']); unset($_SESSION['error_message']); ?>
+      </div>
+    <?php endif; ?>
+
     <?php if (isset($_GET['success'])): ?>
       <div style="background:#d1fae5; padding:10px; border-radius:8px; margin-bottom:20px;">
         Patient added to queue with number <?= htmlspecialchars($_GET['queue'] ?? '') ?>
       </div>
     <?php endif; ?>
 
-    <!-- Waiting Patients -->
+    <!-- Waiting Patients (with assignment) -->
     <div class="queue-section">
       <h3>Waiting (<?= count($waiting) ?>)</h3>
       <?php if (count($waiting) > 0): ?>
@@ -391,6 +439,7 @@ if ($current_role === 'Doctor') {
               <th>Patient</th>
               <th>Severity</th>
               <th>Chief Complaint</th>
+              <th>Assigned Doctor</th>
               <th>Wait (min)</th>
               <th>Actions</th>
             </tr>
@@ -402,11 +451,24 @@ if ($current_role === 'Doctor') {
                 <td><?= htmlspecialchars($w['first_name'] . ' ' . $w['last_name']) ?></td>
                 <td><span class="severity-badge sev<?= $w['severity'] ?>"><?= $w['severity'] ?></span></td>
                 <td><?= htmlspecialchars($w['chief_complaint']) ?></td>
+                <td><?= htmlspecialchars($w['doctor_name'] ?? 'Not assigned') ?></td>
                 <td><?= $w['wait_minutes'] ?></td>
                 <td>
-                  <?php if ($_SESSION['role'] === 'Doctor' || $_SESSION['role'] === 'Admin'): ?>
-                    <a href="triage_queue.php?start=<?= $w['id'] ?>" class="action-btn btn-success" onclick="return confirm('Start consultation?')">Start</a>
+                  <!-- Assignment dropdown for Nurses, Staff, Admins – now starts consultation -->
+                  <?php if (in_array($current_role, ['Nurse', 'Staff', 'Admin'])): ?>
+                    <form method="POST" action="?assign=<?= $w['id'] ?>" style="display:inline;">
+                      <select name="doctor_id" required style="padding:4px; border-radius:4px;">
+                        <option value="">Select doctor</option>
+                        <?php foreach($doctors as $doc): ?>
+                          <option value="<?= $doc['id'] ?>"><?= htmlspecialchars($doc['full_name']) ?></option>
+                        <?php endforeach; ?>
+                      </select>
+                      <button type="submit" class="action-btn btn-primary">Assign & Start</button>
+                    </form>
                   <?php endif; ?>
+
+                  <!-- No Start button – assignment starts consultation directly -->
+
                   <a href="patient_view.php?id=<?= $w['patient_id'] ?>" class="action-btn btn-primary">View</a>
                 </td>
               </tr>
@@ -418,7 +480,7 @@ if ($current_role === 'Doctor') {
       <?php endif; ?>
     </div>
 
-    <!-- In Consultation (filtered if doctor) -->
+    <!-- In Consultation -->
     <?php if (count($in_consult) > 0): ?>
     <div class="queue-section">
       <h3>In Consultation <?= ($current_role === 'Doctor') ? '(Your patients)' : '' ?></h3>
@@ -442,7 +504,7 @@ if ($current_role === 'Doctor') {
               <td><?= htmlspecialchars($c['chief_complaint']) ?></td>
               <td><?= htmlspecialchars($c['doctor_name'] ?? 'Not assigned') ?></td>
               <td>
-                <?php if ($_SESSION['role'] === 'Doctor' || $_SESSION['role'] === 'Admin'): ?>
+                <?php if ($current_role === 'Admin' || ($current_role === 'Doctor' && $c['started_by'] == $current_user_id)): ?>
                   <a href="triage_queue.php?complete=<?= $c['id'] ?>" class="action-btn btn-warning" onclick="return confirm('Mark as completed?')">Complete</a>
                 <?php endif; ?>
               </td>

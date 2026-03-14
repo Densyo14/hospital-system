@@ -83,17 +83,19 @@ $current_user_id = $_SESSION['user_id'] ?? 0;
 $current_user = fetchOne($conn, "SELECT role FROM users WHERE id = ?", "i", [$current_user_id]);
 $is_admin = ($current_user['role'] ?? '') === 'Admin';
 
-// Fetch patient with all details and medical records
+// Fetch patient with all details, medical records, and creator info
 $patient = fetchOne($conn, "
     SELECT 
         p.*,
         TIMESTAMPDIFF(YEAR, p.birth_date, CURDATE()) AS age,
         GROUP_CONCAT(DISTINCT m.diagnosis SEPARATOR ', ') AS diagnosis,
         u.full_name AS archived_by_name,
+        creator.full_name AS created_by_name,
         CASE WHEN p.is_archived = 1 THEN 'Archived' ELSE 'Active' END as status_text
     FROM patients p
     LEFT JOIN medical_records m ON p.id = m.patient_id
     LEFT JOIN users u ON p.archived_by = u.id
+    LEFT JOIN users creator ON p.created_by = creator.id
     WHERE p.id = ?
     GROUP BY p.id
 ", "i", [$patient_id]);
@@ -106,7 +108,7 @@ if (!$patient) {
 $diagnosis = $patient['diagnosis'] ?: 'No diagnosis records.';
 $is_archived = !empty($patient['is_archived']);
 
-// Fetch visit history
+// Fetch visit history (unchanged)
 $visit_history = [];
 
 // Triage visits
@@ -590,6 +592,18 @@ usort($all_visits, function($a, $b) {
         <div class="info-group">
           <div class="info-label">Temperature</div>
           <div class="info-value"><?= htmlspecialchars($patient['temperature'] ?? 'N/A') ?> °C</div>
+        </div>
+        
+        <!-- NEW: Audit info – created by and created at -->
+        <div class="info-group">
+          <div class="info-label">Created By</div>
+          <div class="info-value"><?= htmlspecialchars($patient['created_by_name'] ?? 'System / Unknown') ?></div>
+        </div>
+        <div class="info-group">
+          <div class="info-label">Created At</div>
+          <div class="info-value">
+            <?= !empty($patient['created_at']) ? date('M j, Y g:i A', strtotime($patient['created_at'])) : 'N/A' ?>
+          </div>
         </div>
       </div>
 

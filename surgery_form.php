@@ -122,46 +122,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($schedule_time < $today) $errors[] = "Schedule date cannot be in the past.";
     }
 
-    // If editing, check status change permissions
-    if ($id) {
+    // Get current status if editing
+    $current_status = 'Scheduled';
+    if ($id > 0) {
         $current_surgery = fetchOne($conn, "SELECT status, doctor_id FROM surgeries WHERE id = ?", "i", [$id]);
-        $current_status = $current_surgery['status'] ?? 'Scheduled';
-        $surgery_doctor = $current_surgery['doctor_id'] ?? 0;
+        if ($current_surgery) {
+            $current_status = $current_surgery['status'] ?? 'Scheduled';
+            $surgery_doctor = $current_surgery['doctor_id'] ?? 0;
 
-        $is_owner = ($surgery_doctor == $current_user_id);
-        $can_approve = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner);
-        $can_cancel  = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
-                       ($current_role === 'Nurse');
-        $can_complete = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
-                        ($current_role === 'Nurse');
+            // If editing, check status change permissions
+            if ($new_status !== $current_status) {
+                $is_owner = ($surgery_doctor == $current_user_id);
+                $can_approve = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner);
+                $can_cancel  = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
+                               ($current_role === 'Nurse');
+                $can_complete = ($current_role === 'Admin') || ($current_role === 'Doctor' && $is_owner) ||
+                                ($current_role === 'Nurse');
 
-        $allowed = [];
-        if ($current_status === 'Scheduled') {
-            if ($can_approve) $allowed[] = 'Approved';
-            if ($can_cancel) $allowed[] = 'Cancelled';
-        } elseif ($current_status === 'Approved') {
-            if ($can_complete) $allowed[] = 'Completed';
-            if ($can_cancel) $allowed[] = 'Cancelled';
-        } else {
-            $allowed = [$current_status];
-        }
+                $allowed = false;
+                if ($current_status === 'Scheduled') {
+                    if ($new_status === 'Approved' && $can_approve) $allowed = true;
+                    if ($new_status === 'Cancelled' && $can_cancel) $allowed = true;
+                } elseif ($current_status === 'Approved') {
+                    if ($new_status === 'Completed' && $can_complete) $allowed = true;
+                    if ($new_status === 'Cancelled' && $can_cancel) $allowed = true;
+                } elseif ($current_status === 'Completed' || $current_status === 'Cancelled') {
+                    $errors[] = "Cannot change status of completed or cancelled surgeries.";
+                }
 
-        if (!in_array($new_status, $allowed)) {
-            $errors[] = "Invalid status change.";
-        }
+                if (!$allowed && $new_status !== $current_status) {
+                    $errors[] = "You don't have permission to change status to " . $new_status;
+                }
 
-        if (($new_status === 'Cancelled' || $new_status === 'Completed') && empty($status_reason)) {
-            $errors[] = "Please provide a reason for " . strtolower($new_status) . ".";
+                if (($new_status === 'Cancelled' || $new_status === 'Completed') && empty($status_reason)) {
+                    $errors[] = "Please provide a reason for " . strtolower($new_status) . ".";
+                }
+            }
         }
     }
 
     if (empty($errors)) {
-        if ($id) {
+        if ($id > 0) {
             // Build update query dynamically
-            $fields = ["patient_id = ?", "doctor_id = ?", "surgery_type = ?", "schedule_date = ?", "operating_room = ?", "status = ?"];
-            $params = [$patient_id, $doctor_id, $surgery_type, $schedule_date, $operating_room, $new_status];
-            $types = "iissss";
+            $fields = ["patient_id = ?", "doctor_id = ?", "surgery_type = ?", "schedule_date = ?", "operating_room = ?"];
+            $params = [$patient_id, $doctor_id, $surgery_type, $schedule_date, $operating_room];
+            $types = "iisss";
 
+            // Add status to update
+            $fields[] = "status = ?";
+            $params[] = $new_status;
+            $types .= "s";
+
+            // Add status tracking fields if status changed
             if ($new_status !== $current_status) {
                 if ($new_status === 'Approved') {
                     $fields[] = "approved_by = ?";
@@ -340,6 +352,7 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
     display:inline-block;
     transition:all 0.2s;
     font-size:13px;
+    cursor:pointer;
   }
   .btn:hover{ background:var(--accent); transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,31,63,0.2); }
   .btn-outline {
@@ -357,6 +370,7 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
   }
   .btn-secondary:hover {
     background:#5a6268;
+    transform:translateY(-1px);
   }
   .date-pill{
     background:var(--panel);
@@ -587,88 +601,52 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
 
     <div class="form-card">
       <form method="POST" onsubmit="return validateForm()">
-        <input type="hidden" name="id" value="<?= h($id) ?>">
+        <input type="hidden" name="id" value="<?= htmlspecialchars($id) ?>">
 
         <!-- Patient -->
         <div class="form-group">
           <label class="form-label required">Patient</label>
-          <div class="searchable-select">
-            <select name="patient_id" class="hidden-select" required>
-              <option value="">Select Patient</option>
-              <?php
-              $selected_patient_text = '';
-              foreach($patients as $patient):
-                $selected = $patient_id == $patient['id'];
-                if ($selected) $selected_patient_text = h($patient['full_name']) . " (" . h($patient['patient_code']) . ")";
-              ?>
-                <option value="<?= h($patient['id']) ?>" <?= $selected ? 'selected' : '' ?> data-display="<?= h($patient['full_name'] . " (" . $patient['patient_code'] . ")") ?>">
-                  <?= h($patient['full_name']) ?> (<?= h($patient['patient_code']) ?>)
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <div class="selected-display" onclick="toggleDropdown('patient')" id="patient-display">
-              <?= $selected_patient_text ?: 'Select Patient' ?>
-            </div>
-            <input type="text" class="search-input" placeholder="Search patients..." onkeyup="filterOptions('patient')" id="patient-search">
-            <div class="dropdown-list" id="patient-list">
-              <?php foreach($patients as $patient): ?>
-                <div class="dropdown-item" data-value="<?= h($patient['id']) ?>" onclick="selectOption('patient', this)" <?= $patient_id == $patient['id'] ? 'data-selected="true"' : '' ?>>
-                  <?= h($patient['full_name']) ?> (<?= h($patient['patient_code']) ?>)
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
+          <select name="patient_id" class="form-select" required>
+            <option value="">Select Patient</option>
+            <?php foreach($patients as $patient): ?>
+              <option value="<?= htmlspecialchars($patient['id']) ?>" <?= $patient_id == $patient['id'] ? 'selected' : '' ?>>
+                <?= htmlspecialchars($patient['full_name']) ?> (<?= htmlspecialchars($patient['patient_code']) ?>)
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
 
         <!-- Doctor -->
         <div class="form-group">
           <label class="form-label required">Doctor</label>
-          <div class="searchable-select">
-            <select name="doctor_id" class="hidden-select" required>
-              <option value="">Select Doctor</option>
-              <?php
-              $selected_doctor_text = '';
-              foreach($doctors as $doctor):
-                $selected = $doctor_id == $doctor['id'];
-                if ($selected) $selected_doctor_text = h($doctor['full_name']);
-              ?>
-                <option value="<?= h($doctor['id']) ?>" <?= $selected ? 'selected' : '' ?> data-display="<?= h($doctor['full_name']) ?>">
-                  <?= h($doctor['full_name']) ?>
-                </option>
-              <?php endforeach; ?>
-            </select>
-            <div class="selected-display" onclick="toggleDropdown('doctor')" id="doctor-display">
-              <?= $selected_doctor_text ?: 'Select Doctor' ?>
-            </div>
-            <input type="text" class="search-input" placeholder="Search doctors..." onkeyup="filterOptions('doctor')" id="doctor-search">
-            <div class="dropdown-list" id="doctor-list">
-              <?php foreach($doctors as $doctor): ?>
-                <div class="dropdown-item" data-value="<?= h($doctor['id']) ?>" onclick="selectOption('doctor', this)" <?= $doctor_id == $doctor['id'] ? 'data-selected="true"' : '' ?>>
-                  <?= h($doctor['full_name']) ?>
-                </div>
-              <?php endforeach; ?>
-            </div>
-          </div>
+          <select name="doctor_id" class="form-select" required>
+            <option value="">Select Doctor</option>
+            <?php foreach($doctors as $doctor): ?>
+              <option value="<?= htmlspecialchars($doctor['id']) ?>" <?= $doctor_id == $doctor['id'] ? 'selected' : '' ?>>
+                <?= htmlspecialchars($doctor['full_name']) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
         </div>
 
         <!-- Surgery Type -->
         <div class="form-group">
           <label class="form-label required">Surgery Type</label>
-          <input type="text" name="surgery_type" class="form-control" value="<?= h($surgery_type) ?>" required>
+          <input type="text" name="surgery_type" class="form-control" value="<?= htmlspecialchars($surgery_type) ?>" required>
         </div>
 
         <!-- Schedule Date -->
         <div class="form-group">
           <label class="form-label required">Schedule Date</label>
           <input type="date" name="schedule_date" class="form-control"
-                 value="<?= h($schedule_date) ?>"
+                 value="<?= htmlspecialchars($schedule_date) ?>"
                  min="<?= date('Y-m-d') ?>" required>
         </div>
 
         <!-- Operating Room -->
         <div class="form-group">
           <label class="form-label">Operating Room</label>
-          <input type="text" name="operating_room" class="form-control" value="<?= h($operating_room) ?>">
+          <input type="text" name="operating_room" class="form-control" value="<?= htmlspecialchars($operating_room) ?>">
         </div>
 
         <!-- Status (only when editing) -->
@@ -680,21 +658,22 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
           <label class="form-label">Change Status</label>
           <?php if (!empty($allowed_statuses)): ?>
             <select name="status" id="statusSelect" class="form-select">
-              <option value="<?= $status ?>" selected><?= $status ?></option>
+              <option value="<?= htmlspecialchars($status) ?>" selected>Current: <?= htmlspecialchars($status) ?></option>
               <?php foreach ($allowed_statuses as $val => $label): ?>
-                <option value="<?= $val ?>"><?= $label ?></option>
+                <option value="<?= htmlspecialchars($val) ?>">Change to: <?= htmlspecialchars($label) ?></option>
               <?php endforeach; ?>
             </select>
           <?php else: ?>
             <div class="readonly-status">
-              <span class="status-pill <?= strtolower($status) ?>"><?= $status ?></span>
+              <span class="status-pill <?= strtolower($status) ?>"><?= htmlspecialchars($status) ?></span>
               <small class="muted"> (Cannot be changed)</small>
+              <input type="hidden" name="status" value="<?= htmlspecialchars($status) ?>">
             </div>
           <?php endif; ?>
 
           <!-- Reason field for Cancel/Complete -->
           <div id="statusReasonGroup" class="form-group reason-field">
-            <label for="status_reason">Reason for change:</label>
+            <label for="status_reason" class="form-label required">Reason for change:</label>
             <textarea name="status_reason" id="status_reason" class="form-textarea" rows="2" placeholder="Enter reason..."></textarea>
           </div>
         </div>
@@ -710,94 +689,26 @@ function getAllowedStatuses($current_status, $role, $is_owner) {
 </div>
 
 <script>
-let openDropdown = null;
-
-function toggleDropdown(type) {
-  const list = document.getElementById(`${type}-list`);
-  const search = document.getElementById(`${type}-search`);
-  const display = document.getElementById(`${type}-display`);
-
-  if (openDropdown && openDropdown !== list) {
-    openDropdown.classList.remove('show');
-  }
-
-  if (list.classList.contains('show')) {
-    list.classList.remove('show');
-    openDropdown = null;
-  } else {
-    list.classList.add('show');
-    openDropdown = list;
-    search.focus();
-  }
-
-  document.addEventListener('click', function closeDropdown(e) {
-    if (!list.contains(e.target) && e.target !== display) {
-      list.classList.remove('show');
-      openDropdown = null;
-      document.removeEventListener('click', closeDropdown);
-    }
-  });
-}
-
-function filterOptions(type) {
-  const search = document.getElementById(`${type}-search`);
-  const list = document.getElementById(`${type}-list`);
-  const items = list.getElementsByClassName('dropdown-item');
-  const filter = search.value.toUpperCase();
-
-  for (let i = 0; i < items.length; i++) {
-    const text = items[i].textContent || items[i].innerText;
-    items[i].style.display = text.toUpperCase().indexOf(filter) > -1 ? '' : 'none';
-  }
-}
-
-function selectOption(type, element) {
-  const value = element.getAttribute('data-value');
-  const text = element.textContent;
-  const display = document.getElementById(`${type}-display`);
-  const hiddenSelect = document.querySelector(`select[name="${type}_id"]`);
-
-  display.textContent = text;
-  hiddenSelect.value = value;
-
-  const items = document.getElementById(`${type}-list`).getElementsByClassName('dropdown-item');
-  for (let i = 0; i < items.length; i++) {
-    items[i].classList.remove('selected');
-    items[i].removeAttribute('data-selected');
-  }
-  element.classList.add('selected');
-  element.setAttribute('data-selected', 'true');
-
-  document.getElementById(`${type}-list`).classList.remove('show');
-  openDropdown = null;
-}
-
 // Show/hide reason field when status changes
 document.addEventListener('DOMContentLoaded', function() {
   const statusSelect = document.getElementById('statusSelect');
   const reasonGroup = document.getElementById('statusReasonGroup');
+  
   if (statusSelect && reasonGroup) {
     function toggleReason() {
       const val = statusSelect.value;
+      // Only show reason field for Cancel or Complete
       if (val === 'Cancelled' || val === 'Completed') {
         reasonGroup.style.display = 'block';
+        document.getElementById('status_reason').required = true;
       } else {
         reasonGroup.style.display = 'none';
+        document.getElementById('status_reason').required = false;
       }
     }
     statusSelect.addEventListener('change', toggleReason);
-    toggleReason(); // initial
+    toggleReason(); // initial check
   }
-
-  // Highlight selected items
-  ['patient', 'doctor'].forEach(type => {
-    const items = document.getElementById(`${type}-list`).getElementsByClassName('dropdown-item');
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].getAttribute('data-selected') === 'true') {
-        items[i].classList.add('selected');
-      }
-    }
-  });
 });
 
 function validateForm() {
@@ -806,11 +717,36 @@ function validateForm() {
   const surgeryType = document.querySelector('input[name="surgery_type"]').value.trim();
   const scheduleDate = document.querySelector('input[name="schedule_date"]').value;
 
-  if (!patientId) { alert('Please select a patient.'); return false; }
-  if (!doctorId) { alert('Please select a doctor.'); return false; }
-  if (!surgeryType) { alert('Please enter surgery type.'); return false; }
-  if (!scheduleDate) { alert('Please select a schedule date.'); return false; }
-  if (new Date(scheduleDate) < new Date().setHours(0,0,0,0)) {
+  if (!patientId) { 
+    alert('Please select a patient.'); 
+    document.querySelector('select[name="patient_id"]').focus();
+    return false; 
+  }
+  
+  if (!doctorId) { 
+    alert('Please select a doctor.'); 
+    document.querySelector('select[name="doctor_id"]').focus();
+    return false; 
+  }
+  
+  if (!surgeryType) { 
+    alert('Please enter surgery type.'); 
+    document.querySelector('input[name="surgery_type"]').focus();
+    return false; 
+  }
+  
+  if (!scheduleDate) { 
+    alert('Please select a schedule date.'); 
+    document.querySelector('input[name="schedule_date"]').focus();
+    return false; 
+  }
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const selectedDate = new Date(scheduleDate);
+  selectedDate.setHours(0, 0, 0, 0);
+  
+  if (selectedDate < today) {
     alert('Schedule date cannot be in the past.');
     return false;
   }
@@ -820,13 +756,14 @@ function validateForm() {
   if (statusSelect) {
     const newStatus = statusSelect.value;
     const reasonField = document.getElementById('status_reason');
-    if ((newStatus === 'Cancelled' || newStatus === 'Completed') && (!reasonField.value.trim())) {
+    if ((newStatus === 'Cancelled' || newStatus === 'Completed') && (!reasonField.value || !reasonField.value.trim())) {
       alert('Please provide a reason for ' + newStatus.toLowerCase() + '.');
       reasonField.focus();
       return false;
     }
   }
-  return true;
+  
+  return confirm('Are you sure you want to save these changes?');
 }
 </script>
 </body>

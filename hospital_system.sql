@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Mar 11, 2026 at 01:43 PM
+-- Generation Time: Mar 14, 2026 at 02:26 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -33,27 +33,41 @@ CREATE TABLE `appointments` (
   `doctor_id` int(11) DEFAULT NULL,
   `schedule_datetime` datetime DEFAULT NULL,
   `status` enum('Pending','Approved','Completed','Cancelled') DEFAULT 'Pending',
+  `approved_by` int(11) DEFAULT NULL,
   `reason` text DEFAULT NULL,
   `is_archived` tinyint(1) DEFAULT 0,
   `archived_at` datetime DEFAULT NULL,
   `archived_by` int(11) DEFAULT NULL,
+  `cancelled_by` int(11) DEFAULT NULL,
   `notes` text DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_by` int(11) DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `cancellation_reason` text DEFAULT NULL,
+  `completed_by` int(11) DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `completion_reason` text DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `appointments`
 --
 
-INSERT INTO `appointments` (`id`, `patient_id`, `doctor_id`, `schedule_datetime`, `status`, `reason`, `is_archived`, `archived_at`, `archived_by`, `notes`, `created_at`) VALUES
-(1, 1, 3, '2025-11-27 09:00:00', 'Approved', 'Follow-up Checkup', 0, NULL, NULL, NULL, '2025-11-27 08:10:29'),
-(2, 2, 4, '2025-11-29 10:30:00', 'Cancelled', 'Initial Consultation', 0, NULL, NULL, '', '2025-11-27 08:10:29'),
-(3, 3, 5, '2025-11-30 14:00:00', 'Approved', 'Surgery Scheduling', 0, NULL, NULL, NULL, '2025-11-27 08:10:29'),
-(4, 4, 5, '2025-12-19 08:00:00', 'Completed', 'Post-surgery reviews', 0, NULL, NULL, '', '2025-11-27 08:10:29'),
-(5, 5, 7, '2025-12-12 11:00:00', 'Pending', 'Guardian unavailable waiting', 0, NULL, NULL, '', '2025-11-27 08:10:29'),
-(6, 8, 4, '2025-11-28 19:45:00', 'Pending', 'hi', 0, NULL, NULL, NULL, '2025-11-27 08:10:29'),
-(9, 25, 6, '2025-12-19 10:58:00', 'Pending', 'Cure to UTI', 0, NULL, NULL, 'Hes Bad', '2025-12-04 11:53:03'),
-(10, 22, 4, '2025-12-25 21:15:00', 'Pending', 'Potty', 1, '2025-12-09 10:04:27', 31, 'Potty', '2025-12-08 08:53:03');
+INSERT INTO `appointments` (`id`, `patient_id`, `doctor_id`, `schedule_datetime`, `status`, `approved_by`, `reason`, `is_archived`, `archived_at`, `archived_by`, `cancelled_by`, `notes`, `created_at`, `created_by`, `cancelled_at`, `cancellation_reason`, `completed_by`, `completed_at`, `completion_reason`, `approved_at`) VALUES
+(1, 1, 3, '2025-11-27 09:00:00', 'Approved', NULL, 'Follow-up Checkup', 0, NULL, NULL, NULL, NULL, '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(2, 2, 4, '2025-11-29 10:30:00', 'Cancelled', NULL, 'Initial Consultation', 1, '2026-03-13 03:43:22', 31, NULL, '', '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(3, 3, 5, '2025-11-30 14:00:00', 'Approved', NULL, 'Surgery Scheduling', 0, NULL, NULL, NULL, NULL, '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(4, 4, 5, '2025-12-19 08:00:00', 'Completed', NULL, 'Post-surgery reviews', 0, NULL, NULL, NULL, '', '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(5, 22, 7, '2026-03-17 11:00:00', 'Pending', NULL, 'Guardian unavailable waiting', 0, NULL, NULL, NULL, '', '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(6, 8, 4, '2025-11-28 19:45:00', 'Pending', NULL, 'hi', 0, NULL, NULL, NULL, NULL, '2025-11-27 08:10:29', NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(9, 25, 6, '2026-03-14 12:00:00', 'Cancelled', 31, 'Cure to UTI', 0, NULL, NULL, 39, 'Hes Bad', '2025-12-04 11:53:03', NULL, '2026-03-13 15:03:47', 'Doctor Personal Reasons', NULL, NULL, NULL, '2026-03-13 11:36:02'),
+(10, 22, 4, '2026-03-18 21:15:00', 'Completed', 31, 'Potty', 0, NULL, NULL, NULL, 'Potty', '2025-12-08 08:53:03', NULL, NULL, NULL, 31, '2026-03-14 08:19:56', 'Done', '2026-03-13 09:34:02'),
+(11, 29, 6, '2026-03-20 08:00:00', 'Cancelled', NULL, 'Check up', 0, NULL, NULL, 31, 'the px wounds didnt heal', '2026-03-12 06:00:33', NULL, '2026-03-13 03:24:08', 'IM NOOB', NULL, NULL, NULL, NULL),
+(12, 28, 35, '2026-03-26 19:25:00', 'Cancelled', NULL, 'Hello', 0, NULL, NULL, 31, '', '2026-03-12 19:22:51', NULL, '2026-03-13 03:50:16', 'ddd', NULL, NULL, NULL, NULL),
+(13, 30, 36, '2026-03-19 04:43:00', 'Completed', 31, 's', 0, NULL, NULL, NULL, '', '2026-03-12 19:43:58', NULL, NULL, NULL, 31, '2026-03-13 09:34:07', 'Done', '2026-03-13 03:50:27'),
+(14, 30, 36, '2026-03-23 04:50:00', 'Cancelled', 36, 'sss', 0, NULL, NULL, 36, '', '2026-03-12 19:50:44', NULL, '2026-03-13 03:51:23', 'Doctor Personal Reasons', NULL, NULL, NULL, '2026-03-13 03:51:08'),
+(15, 28, 36, '2026-03-30 05:13:00', 'Cancelled', NULL, 'kk', 0, NULL, NULL, 31, '', '2026-03-12 20:16:33', 31, '2026-03-13 09:33:00', 'Because he cant go', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -84,7 +98,9 @@ INSERT INTO `archive_logs` (`id`, `table_name`, `record_id`, `archived_by`, `arc
 (7, 'billing', 10, 31, '2025-12-04 17:30:38', 'Archived by user'),
 (8, 'patients', 28, 31, '2025-12-09 06:53:45', 'Archived by administrator'),
 (9, 'appointments', 10, 31, '2025-12-09 10:04:27', 'Archived by administrator'),
-(10, 'inventory_items', 13, 31, '2025-12-09 11:14:58', 'Archived by user');
+(10, 'inventory_items', 13, 31, '2025-12-09 11:14:58', 'Archived by user'),
+(11, 'billing', 18, 31, '2026-03-13 08:47:42', 'Archived by user'),
+(12, 'billing', 10, 31, '2026-03-13 08:47:45', 'Archived by user');
 
 -- --------------------------------------------------------
 
@@ -119,10 +135,11 @@ INSERT INTO `billing` (`id`, `patient_id`, `financial_id`, `financial_assessment
 (7, 1, NULL, 1, 6, 35000.00, 20000.00, 5000.00, 10000.00, 'Unpaid', '2025-11-26 09:42:03', 0, NULL, NULL, NULL),
 (8, 3, NULL, NULL, 7, 42000.00, 20000.00, 10000.00, 12000.00, 'Unpaid', '2025-11-26 09:42:03', 0, NULL, NULL, NULL),
 (9, 4, NULL, 4, 9, 18000.00, 5000.00, 3000.00, 10000.00, 'Paid', '2025-11-26 09:42:03', 0, NULL, NULL, NULL),
-(10, 2, NULL, NULL, NULL, 50000.00, 25000.00, 10000.00, 15000.00, 'Paid', '2025-11-26 09:42:03', 0, NULL, NULL, '2025-12-09 14:00:10'),
+(10, 2, NULL, NULL, NULL, 50000.00, 25000.00, 10000.00, 15000.00, 'Paid', '2025-11-26 09:42:03', 1, '2026-03-13 08:47:45', 31, '2025-12-09 14:00:10'),
 (14, 20, NULL, 7, 11, 10000.00, 2000.00, 1500.00, 6500.00, 'Paid', '2025-12-09 05:58:22', 0, NULL, NULL, '2025-12-09 13:58:55'),
 (15, 21, NULL, 9, NULL, 90000.00, 45000.00, 27000.00, 18000.00, 'Paid', '2025-12-09 06:56:44', 0, NULL, NULL, '2025-12-09 15:14:59'),
-(16, 8, NULL, 6, 11, 90000.00, 72000.00, 18000.00, 0.00, 'Unpaid', '2025-12-15 10:44:16', 0, NULL, NULL, NULL);
+(16, 8, NULL, 6, 11, 90000.00, 72000.00, 18000.00, 0.00, 'Unpaid', '2025-12-15 10:44:16', 0, NULL, NULL, NULL),
+(18, 28, NULL, NULL, NULL, 25555.00, 0.00, 0.00, 25555.00, 'Paid', '2026-03-13 00:46:42', 0, NULL, NULL, '2026-03-13 08:47:39');
 
 -- --------------------------------------------------------
 
@@ -248,15 +265,15 @@ CREATE TABLE `inventory_items` (
 INSERT INTO `inventory_items` (`id`, `item_name`, `category`, `quantity`, `threshold`, `unit`, `updated_at`, `is_archived`, `archived_at`, `archived_by`) VALUES
 (1, 'Titanium Implant Rod', 'Implant', 48, 5, 'pcs', '2025-12-08 22:42:34', 0, NULL, NULL),
 (2, 'Surgical Suture 3-0', 'Suture', 196, 20, 'packs', '2025-12-08 22:42:34', 0, NULL, NULL),
-(3, 'Antibiotic Cefalexin', 'Medicine', 9, 10, '0', '2025-12-08 22:42:55', 0, NULL, NULL),
-(4, 'Crutches (Child Size)', 'Equipment', 28, 5, '0', '2025-12-09 03:15:09', 0, NULL, NULL),
+(3, 'Antibiotic Cefalexin', 'Medicine', 2, 10, '1', '2026-03-14 00:50:13', 0, NULL, NULL),
+(4, 'Crutches (Child Size)', 'Equipment', 33, 5, '1', '2026-03-12 06:11:09', 0, NULL, NULL),
 (5, 'Face Masks', 'General', 499, 50, '0', '2025-12-09 10:05:45', 0, NULL, NULL),
 (6, 'Wheelchair Pediatric', 'Equipment', 9, 2, 'units', '2025-12-08 22:42:34', 0, NULL, NULL),
 (7, 'Orthopedic Screws', 'Implant', 148, 15, 'pcs', '2025-12-08 22:42:34', 0, NULL, NULL),
-(8, 'Gauze Pads', 'General', 297, 25, '0', '2025-12-09 10:05:49', 0, NULL, NULL),
-(9, 'Orthopedic Plates', 'Implant', 75, 10, 'pcs', '2025-12-04 11:47:25', 0, NULL, NULL),
+(8, 'Gauze Pads', 'General', 297, 25, '2', '2026-03-14 00:21:55', 0, NULL, NULL),
+(9, 'Orthopedic Plates', 'Implant', 75, 10, 'pcs', '2026-03-12 21:47:16', 0, NULL, NULL),
 (10, 'Surgical Gloves', 'General', 850, 100, 'pairs', '2025-12-04 11:47:25', 0, NULL, NULL),
-(11, 'Intravenous Fluids', 'Medicine', 45, 8, 'bags', '2025-12-04 11:47:25', 0, NULL, NULL),
+(11, 'Intravenous Fluids', 'Medicine', 45, 8, 'bags', '2026-03-12 21:47:13', 0, NULL, NULL),
 (12, 'Sterile Drapes', 'General', 220, 30, 'packs', '2025-12-04 11:47:25', 0, NULL, NULL),
 (13, 'Biogesic', 'Medicine', 15, 5, '0', '2025-12-09 03:14:58', 1, '2025-12-09 11:14:58', 31);
 
@@ -301,7 +318,8 @@ INSERT INTO `medical_records` (`id`, `patient_id`, `doctor_id`, `diagnosis`, `cl
 (3, 3, 5, 'Leg Deformity', 'Bone realignment procedure recommended.', '2025-11-26 09:40:53'),
 (4, 4, 6, 'Tendon Shortening', 'Patient preparing for tendon release.', '2025-11-26 09:40:53'),
 (5, 5, 7, 'Hip Dysplasia', 'Requires hip reconstruction surgery.', '2025-11-26 09:40:53'),
-(6, 25, 3, 'UTI', NULL, '2025-12-04 11:51:13');
+(6, 25, 3, 'UTI', NULL, '2025-12-04 11:51:13'),
+(7, 29, 3, 'Diabetes', NULL, '2026-03-12 05:46:03');
 
 -- --------------------------------------------------------
 
@@ -327,6 +345,7 @@ CREATE TABLE `patients` (
   `temperature` decimal(4,2) DEFAULT NULL,
   `guardian_name` varchar(150) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_by` int(11) DEFAULT NULL,
   `is_archived` tinyint(1) DEFAULT 0,
   `archived_at` datetime DEFAULT NULL,
   `archived_by` int(11) DEFAULT NULL
@@ -336,21 +355,27 @@ CREATE TABLE `patients` (
 -- Dumping data for table `patients`
 --
 
-INSERT INTO `patients` (`id`, `patient_code`, `first_name`, `last_name`, `gender`, `sex`, `birth_date`, `phone`, `address`, `guardian`, `blood_type`, `weight`, `height`, `pulse_rate`, `temperature`, `guardian_name`, `created_at`, `is_archived`, `archived_at`, `archived_by`) VALUES
-(1, 'P-1001', 'Gabriel', 'Lopez', NULL, 'Male', '2014-06-12', '09123456701', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Maria Lopez', '2025-11-26 09:34:30', 0, NULL, NULL),
-(2, 'P-1002', 'Hannah', 'Reyes', NULL, 'Female', '2012-03-22', '09123456702', 'Panabo City', NULL, NULL, NULL, NULL, NULL, NULL, 'James Reyes', '2025-11-26 09:34:30', 0, NULL, NULL),
-(3, 'P-1003', 'Miguel', 'Santos', NULL, 'Male', '2015-01-10', '09123456703', 'Tagum City', NULL, NULL, NULL, NULL, NULL, NULL, 'Ana Santos', '2025-11-26 09:34:30', 0, NULL, NULL),
-(4, 'P-1004', 'Sophia', 'Dela Cruz', NULL, 'Female', '2016-08-30', '09123456704', 'Digos City', NULL, NULL, NULL, NULL, NULL, NULL, 'Mark Dela Cruz', '2025-11-26 09:34:30', 0, NULL, NULL),
-(5, 'P-1005', 'Ethan', 'Garcia', NULL, 'Male', '2013-07-18', '09123456705', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Louis Garcia', '2025-11-26 09:34:30', 1, '2025-12-09 07:05:34', 31),
-(6, 'P-1006', 'Isabelle', 'Torres', NULL, 'Female', '2011-11-11', '09123456706', 'Davao del Sur', NULL, NULL, NULL, NULL, NULL, NULL, 'Janet Torres', '2025-11-26 09:34:30', 0, NULL, NULL),
-(8, 'P-1008', 'Chloe', 'Martinez', NULL, 'Female', '2017-05-14', '09123456708', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Patricia Martinez', '2025-11-26 09:34:30', 0, NULL, NULL),
-(20, 'P20250014', 'Dennis', 'Licayan', 'Male', NULL, '2001-02-09', '09183344144', 'Bagong buhay', 's', 'A-', 12.00, 2.00, 12, 1.00, NULL, '2025-11-27 06:22:24', 0, NULL, NULL),
-(21, 'P20250015', 'Razel Joy', 'Licayans', 'Female', NULL, '2008-11-20', '09183344144', 'Davao City', 'Dennis Licayan', 'A+', 55.00, 100.00, 902, 45.00, NULL, '2025-11-27 06:29:39', 0, NULL, NULL),
-(22, 'P-1010', 'Andrea', 'Lim', 'Female', 'Female', '2015-09-14', '09123456710', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Robert Lim', '2025-12-04 11:47:25', 0, NULL, NULL),
-(23, 'P-1011', 'Daniel', 'Sy', 'Male', 'Male', '2016-04-08', '09123456711', 'Panabo City', NULL, NULL, NULL, NULL, NULL, NULL, 'Lily Sy', '2025-12-04 11:47:25', 0, NULL, NULL),
-(24, 'P-1012', 'Mikaela', 'Ong', 'Female', 'Female', '2014-12-25', '09123456712', 'Tagum City', 's', 'B+', 22.00, 155.00, 160, 34.00, 'David Ong', '2025-12-04 11:47:25', 0, NULL, NULL),
-(25, 'P20250013', 'James Paul', 'Sabuya', 'Male', NULL, '2010-02-10', '09159856712', 'Laverna Davao City', 'Kylle Sabuya', 'A-', 43.00, 172.00, 90, 37.00, NULL, '2025-12-04 11:51:13', 0, NULL, NULL),
-(28, 'P20250028', 'Paulo', 'Anton', 'Male', NULL, '2004-10-18', '09155404344', 'Davao City', 'Paula Anton', 'AB-', 122.00, 160.00, 139, 70.00, NULL, '2025-12-08 08:56:09', 0, NULL, NULL);
+INSERT INTO `patients` (`id`, `patient_code`, `first_name`, `last_name`, `gender`, `sex`, `birth_date`, `phone`, `address`, `guardian`, `blood_type`, `weight`, `height`, `pulse_rate`, `temperature`, `guardian_name`, `created_at`, `created_by`, `is_archived`, `archived_at`, `archived_by`) VALUES
+(1, 'P-1001', 'Gabriel', 'Lopez', NULL, 'Male', '2014-06-12', '09123456701', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Maria Lopez', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(2, 'P-1002', 'Hannah', 'Reyes', NULL, 'Female', '2012-03-22', '09123456702', 'Panabo City', NULL, NULL, NULL, NULL, NULL, NULL, 'James Reyes', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(3, 'P-1003', 'Miguel', 'Santos', NULL, 'Male', '2015-01-10', '09123456703', 'Tagum City', NULL, NULL, NULL, NULL, NULL, NULL, 'Ana Santos', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(4, 'P-1004', 'Sophia', 'Dela Cruz', 'Female', 'Female', '2016-08-30', '09123456704', 'Digos City', '', '', NULL, NULL, NULL, NULL, 'Mark Dela Cruz', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(5, 'P-1005', 'Ethan', 'Garcia', NULL, 'Male', '2013-07-18', '09123456705', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Louis Garcia', '2025-11-26 09:34:30', NULL, 1, '2025-12-09 07:05:34', 31),
+(6, 'P-1006', 'Isabelle', 'Torres', NULL, 'Female', '2011-11-11', '09123456706', 'Davao del Sur', NULL, NULL, NULL, NULL, NULL, NULL, 'Janet Torres', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(8, 'P-1008', 'Chloe', 'Martinez', NULL, 'Female', '2017-05-14', '09123456708', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Patricia Martinez', '2025-11-26 09:34:30', NULL, 0, NULL, NULL),
+(20, 'P20250014', 'Dennis', 'Licayan', 'Male', NULL, '2001-02-09', '09183344144', 'Bagong buhay', 's', 'A-', 12.00, 2.00, 12, 1.00, NULL, '2025-11-27 06:22:24', NULL, 0, NULL, NULL),
+(21, 'P20250015', 'Razel Joy', 'Licayans', 'Female', NULL, '2008-11-20', '09183344144', 'Davao City', 'Dennis Licayan', 'A+', 55.00, 100.00, 902, 45.00, NULL, '2025-11-27 06:29:39', NULL, 0, NULL, NULL),
+(22, 'P-1010', 'Andrea', 'Lim', 'Female', 'Female', '2015-09-14', '09123456710', 'Davao City', NULL, NULL, NULL, NULL, NULL, NULL, 'Robert Lim', '2025-12-04 11:47:25', NULL, 0, NULL, NULL),
+(23, 'P-1011', 'Daniel', 'Sy', 'Male', 'Male', '2016-04-08', '09123456711', 'Panabo City', NULL, NULL, NULL, NULL, NULL, NULL, 'Lily Sy', '2025-12-04 11:47:25', NULL, 0, NULL, NULL),
+(24, 'P-1012', 'Mikaela', 'Ong', 'Female', 'Female', '2014-12-25', '09123456712', 'Tagum City', 's', 'B+', 22.00, 155.00, 160, 34.00, 'David Ong', '2025-12-04 11:47:25', NULL, 0, NULL, NULL),
+(25, 'P20250013', 'James Paul', 'Sabuya', 'Male', NULL, '2010-02-10', '09159856712', 'Laverna Davao City', 'Kylle Sabuya', 'A-', 43.00, 172.00, 90, 37.00, NULL, '2025-12-04 11:51:13', NULL, 0, NULL, NULL),
+(28, 'P20250028', 'Paulooo', 'Anton', 'Male', NULL, '2004-10-18', '09155404344', 'Davao City', 'Paula Anton', 'AB-', 122.00, 160.00, 132, 70.00, NULL, '2025-12-08 08:56:09', NULL, 0, NULL, NULL),
+(29, 'P20260029', 'Louise Micko', 'Tabarno', 'Male', NULL, '2001-11-09', '09183344144', 'Davao City', '', 'B-', 67.00, 178.00, 120, 36.00, NULL, '2026-03-12 05:46:03', NULL, 0, NULL, NULL),
+(30, 'P20260030', 'Bill', 'Cipher', 'Female', NULL, '2002-02-09', '09334455122', 'Davao City', '', 'B-', 99.00, 155.00, 125, 36.00, NULL, '2026-03-12 17:48:32', NULL, 0, NULL, NULL),
+(31, 'P20260031', 'Via', 'Gonazles', 'Female', NULL, '2005-12-21', '09885544332', 'Davao City', '', 'AB-', 56.00, 145.00, 88, 38.00, NULL, '2026-03-12 18:42:48', 36, 0, NULL, NULL),
+(32, 'P20260032', 'SPongeBOb', 'Squarepants', 'Male', NULL, '2001-01-05', '09075154117', 'Davao City', '', 'A+', 55.00, 155.00, 90, 35.80, NULL, '2026-03-13 07:00:29', 39, 0, NULL, NULL),
+(33, 'P20260033', 'SPongeBOb', 'Squarepants', 'Male', NULL, '2001-11-09', '09075154117', 'Davao', 'Kylle Sabuya', 'A-', 55.00, 155.00, 55, 36.00, NULL, '2026-03-13 07:01:09', 39, 0, NULL, NULL),
+(34, 'P20260034', 'James', 'paul', 'Male', NULL, '2001-11-09', '09193344144', 'Bagong Buhay, Davao City', '', 'B+', 55.00, 55.00, 55, 55.00, NULL, '2026-03-13 23:36:39', 31, 0, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -419,26 +444,36 @@ CREATE TABLE `surgeries` (
   `surgery_type` varchar(150) DEFAULT NULL,
   `schedule_date` date DEFAULT NULL,
   `operating_room` varchar(20) DEFAULT NULL,
-  `status` enum('Scheduled','Completed','Cancelled') DEFAULT 'Scheduled',
+  `status` enum('Scheduled','Approved','Completed','Cancelled','In Progress') NOT NULL DEFAULT 'Scheduled',
+  `approved_by` int(11) DEFAULT NULL,
   `is_archived` tinyint(1) DEFAULT 0,
   `archived_at` datetime DEFAULT NULL,
   `archived_by` int(11) DEFAULT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_by` int(11) DEFAULT NULL,
+  `approved_at` datetime DEFAULT NULL,
+  `cancelled_by` int(11) DEFAULT NULL,
+  `cancelled_at` datetime DEFAULT NULL,
+  `cancellation_reason` text DEFAULT NULL,
+  `completed_by` int(11) DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `completion_reason` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `surgeries`
 --
 
-INSERT INTO `surgeries` (`id`, `patient_id`, `doctor_id`, `surgery_type`, `schedule_date`, `operating_room`, `status`, `is_archived`, `archived_at`, `archived_by`, `created_at`) VALUES
-(6, 1, 3, 'Clubfoot Correction', '2025-11-28', 'OR-1', 'Scheduled', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(7, 2, 4, 'Scoliosis Adjustment', '2025-12-01', 'OR-2', 'Scheduled', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(8, 3, 5, 'Bone Realignment', '2025-12-03', 'OR-3', 'Completed', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(9, 4, 6, 'Tendon Release', '2025-12-05', 'OR-1', 'Scheduled', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(10, 5, 7, 'Hip Reconstruction', '2025-12-10', 'OR-3', 'Cancelled', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(11, 8, 4, 'Achilles', '2026-12-09', 'room 12', 'Scheduled', 0, NULL, NULL, '2025-11-27 08:34:09'),
-(12, 8, 5, 'Achilles', '2026-12-09', 'room 12', 'Scheduled', 0, NULL, NULL, '2025-12-08 08:53:22'),
-(13, 24, 35, 'Feed', '2025-12-16', 'OR-25', 'Scheduled', 0, NULL, NULL, '2025-12-15 11:37:31');
+INSERT INTO `surgeries` (`id`, `patient_id`, `doctor_id`, `surgery_type`, `schedule_date`, `operating_room`, `status`, `approved_by`, `is_archived`, `archived_at`, `archived_by`, `created_at`, `created_by`, `approved_at`, `cancelled_by`, `cancelled_at`, `cancellation_reason`, `completed_by`, `completed_at`, `completion_reason`) VALUES
+(6, 1, 3, 'Clubfoot Correction', '2025-11-28', 'OR-1', 'Scheduled', NULL, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(7, 2, 4, 'Scoliosis Adjustment', '2026-03-14', 'OR-2', 'Cancelled', NULL, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, NULL, 31, '2026-03-13 11:04:41', 's', NULL, NULL, NULL),
+(8, 3, 5, 'Bone Realignment', '2025-12-03', 'OR-3', 'Completed', NULL, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(9, 4, 6, 'Tendon Release', '2026-03-19', 'OR-1', 'Approved', 31, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, '2026-03-13 10:57:13', NULL, NULL, NULL, NULL, NULL, NULL),
+(10, 5, 7, 'Hip Reconstruction', '2025-12-10', 'OR-3', 'Cancelled', NULL, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(11, 8, 4, 'Achilles', '2026-12-09', 'room 12', 'Cancelled', 31, 0, NULL, NULL, '2025-11-27 08:34:09', NULL, '2026-03-13 10:56:02', 31, '2026-03-14 08:31:10', 'THe patient is ok', NULL, NULL, NULL),
+(12, 8, 5, 'Achilles', '2026-12-09', 'room 12', 'Scheduled', NULL, 0, NULL, NULL, '2025-12-08 08:53:22', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(13, 24, 35, 'Feed', '2026-03-20', 'OR-25', 'Approved', 31, 0, NULL, NULL, '2025-12-15 11:37:31', NULL, '2026-03-13 11:03:40', NULL, NULL, NULL, NULL, NULL, NULL),
+(14, 28, 35, 'Feed', '2026-03-20', '', 'Approved', 31, 0, NULL, NULL, '2026-03-13 03:04:05', NULL, '2026-03-13 11:23:04', NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -467,6 +502,52 @@ INSERT INTO `surgery_inventory` (`id`, `surgery_id`, `item_id`, `quantity_used`)
 (30, 11, 2, 4),
 (31, 11, 1, 2),
 (32, 11, 6, 1);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `triage`
+--
+
+CREATE TABLE `triage` (
+  `id` int(11) NOT NULL,
+  `patient_id` int(11) NOT NULL,
+  `assessed_by` int(11) NOT NULL,
+  `assessed_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `severity` tinyint(4) NOT NULL COMMENT '1=Low, 5=Critical',
+  `chief_complaint` text DEFAULT NULL,
+  `blood_pressure` varchar(20) DEFAULT NULL,
+  `heart_rate` int(11) DEFAULT NULL,
+  `temperature` decimal(4,2) DEFAULT NULL,
+  `oxygen_saturation` int(11) DEFAULT NULL,
+  `pain_level` tinyint(4) DEFAULT NULL COMMENT '0-10',
+  `queue_number` varchar(20) DEFAULT NULL,
+  `status` enum('waiting','in_consultation','completed','cancelled') DEFAULT 'waiting',
+  `assigned_doctor` int(11) DEFAULT NULL,
+  `started_by` int(11) DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `started_at` datetime DEFAULT NULL,
+  `completed_by` int(11) DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `triage`
+--
+
+INSERT INTO `triage` (`id`, `patient_id`, `assessed_by`, `assessed_at`, `severity`, `chief_complaint`, `blood_pressure`, `heart_rate`, `temperature`, `oxygen_saturation`, `pain_level`, `queue_number`, `status`, `assigned_doctor`, `started_by`, `notes`, `started_at`, `completed_by`, `completed_at`) VALUES
+(1, 28, 39, '2026-03-13 01:53:05', 2, 'Cough', '', NULL, NULL, NULL, NULL, 'Q-20260312-001', 'in_consultation', NULL, NULL, '', NULL, NULL, NULL),
+(2, 28, 39, '2026-03-13 01:57:22', 1, 'Fever', '', NULL, NULL, NULL, NULL, 'Q-20260312-002', 'in_consultation', NULL, NULL, '', NULL, NULL, NULL),
+(3, 28, 39, '2026-03-13 02:10:35', 3, 'Tore ACL', '120/80', 120, 36.00, 2, 5, 'Q-20260312-003', 'completed', NULL, 36, '', '2026-03-13 02:51:34', 36, '2026-03-13 02:51:36'),
+(4, 2, 39, '2026-03-13 02:17:54', 2, 'Heavy Coughing', '', 90, 35.00, 90, 2, 'Q-20260312-004', 'completed', NULL, 36, '', '2026-03-13 02:51:44', 36, '2026-03-13 02:51:45'),
+(5, 24, 35, '2026-03-13 02:19:11', 1, 'Minor Headache', '', 120, 35.00, 100, 1, 'Q-20260312-005', 'completed', NULL, 35, '', '2026-03-13 02:19:22', 31, '2026-03-13 05:49:40'),
+(6, 28, 35, '2026-03-13 02:26:23', 5, 'Critical', '180/90', 40, 36.00, 33, 10, 'Q-20260312-006', 'completed', NULL, 36, '', '2026-03-13 02:51:41', 36, '2026-03-13 02:51:42'),
+(7, 6, 39, '2026-03-13 02:27:27', 1, 'Severe Headache', '', 122, 36.00, 99, 1, 'Q-20260312-007', 'completed', NULL, 36, '', '2026-03-13 02:30:28', 36, '2026-03-13 02:33:30'),
+(8, 30, 36, '2026-03-13 05:50:39', 3, '5', '5', 5, 5.00, 5, 5, 'Q-20260312-008', 'completed', NULL, 36, '5', '2026-03-13 05:50:42', 36, '2026-03-13 05:50:45'),
+(9, 30, 36, '2026-03-13 11:18:01', 5, '222', '2222', 222, 2.00, 22, 2, 'Q-20260313-009', 'completed', NULL, 36, '2', '2026-03-13 15:04:28', 36, '2026-03-13 15:04:39'),
+(10, 4, 36, '2026-03-13 15:05:21', 3, 'efef', '99', 99, 37.00, 88, 1, 'Q-20260313-010', 'waiting', NULL, NULL, '', NULL, NULL, NULL),
+(11, 28, 39, '2026-03-14 07:33:53', 4, 'Hello', '120/80', 72, 33.00, 98, 5, 'Q-20260314-001', 'in_consultation', NULL, 39, '', '2026-03-14 07:34:06', NULL, NULL),
+(12, 22, 39, '2026-03-14 07:53:14', 1, 'Cough', '', NULL, NULL, NULL, NULL, 'Q-20260314-002', 'completed', 35, 35, '', '2026-03-14 08:25:01', 35, '2026-03-14 08:26:16');
 
 -- --------------------------------------------------------
 
@@ -505,7 +586,11 @@ INSERT INTO `users` (`id`, `full_name`, `username`, `password`, `role`, `created
 (32, 'Dennis Licayan', 'dennis@gmail.com', '$2y$10$e.E1ihXsNO2O6rSCs5gvLO5wmGRDMF2UYr0TsZ4S5CtV298bADLOG', 'Staff', '2025-12-04 09:32:25', 1, NULL),
 (33, 'Louise Micko Tabarno', 'l.tabarno@gmail.com', '$2y$10$uFULf1H04sTuZpRY8Kv0qe8RxQMJUYQpBRV0e44bYp/rMYYVS1i1O', 'Staff', '2025-12-08 08:55:21', 1, NULL),
 (34, 'Paul James', 'paul@gmail.com', '$2y$10$sy7epeyfO.4yWkAf3gwUwOPhQDCP4WGg5oEwbOgZDq7AFzViHmpni', 'Billing', '2025-12-09 03:31:53', 1, NULL),
-(35, 'Dennis Licayan', 'd.licayan@gmail.com', '$2y$10$5xuqCgc6nrIPVeO6YDfwSOtVgGklNkAKpDU3Dgtx1aGs.wg/t9OfC', 'Doctor', '2025-12-15 11:34:04', 1, NULL);
+(35, 'Dennis Licayan', 'd.licayan@gmail.com', '$2y$10$5xuqCgc6nrIPVeO6YDfwSOtVgGklNkAKpDU3Dgtx1aGs.wg/t9OfC', 'Doctor', '2025-12-15 11:34:04', 1, NULL),
+(36, 'Dr. Louise Micko Tabarno', 'louise@gmail.com', '$2y$10$akKqYlUkh5jdzT3oXSKn/OLC9VR/nRH1lq0VDDhG2hvEHlO3mjvqe', 'Doctor', '2026-03-12 03:54:56', 1, NULL),
+(37, 'Keeno Candrejo', 'keeno@gmail.com', '$2y$10$bgC3RfSP5nheBLffJQBIBupR4G90x6jeqZWJA8q.Ul3F36KoAbnXe', 'Staff', '2026-03-12 03:55:46', 1, NULL),
+(38, 'Dennis Gabriel Licayan', 'dennis1@gmail.com', '$2y$10$n1j96LPhBH9gHrbzL6txAOdm4CQN48YB1zSexb4H9ONt5Qy6eZNu6', 'Billing', '2026-03-12 03:56:28', 1, NULL),
+(39, 'James Paul Balagat', 'james@gmail.com', '$2y$10$yqROFZSvqJM2PxjD3fENZOtRDOeqMG7nEhAK7w9Wk7.bJr3GZhfFa', 'Nurse', '2026-03-12 03:57:09', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -528,7 +613,11 @@ ALTER TABLE `appointments`
   ADD KEY `patient_id` (`patient_id`),
   ADD KEY `archived_by` (`archived_by`),
   ADD KEY `idx_appointments_archived` (`is_archived`),
-  ADD KEY `idx_appointments_doctor_datetime` (`doctor_id`,`schedule_datetime`);
+  ADD KEY `idx_appointments_doctor_datetime` (`doctor_id`,`schedule_datetime`),
+  ADD KEY `created_by` (`created_by`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `cancelled_by` (`cancelled_by`),
+  ADD KEY `completed_by` (`completed_by`);
 
 --
 -- Indexes for table `archive_logs`
@@ -588,7 +677,8 @@ ALTER TABLE `medical_records`
 ALTER TABLE `patients`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `patient_code` (`patient_code`),
-  ADD KEY `archived_by` (`archived_by`);
+  ADD KEY `archived_by` (`archived_by`),
+  ADD KEY `created_by` (`created_by`);
 
 --
 -- Indexes for table `post_op_equipment`
@@ -604,7 +694,11 @@ ALTER TABLE `surgeries`
   ADD PRIMARY KEY (`id`),
   ADD KEY `patient_id` (`patient_id`),
   ADD KEY `doctor_id` (`doctor_id`),
-  ADD KEY `archived_by` (`archived_by`);
+  ADD KEY `archived_by` (`archived_by`),
+  ADD KEY `created_by` (`created_by`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `cancelled_by` (`cancelled_by`),
+  ADD KEY `completed_by` (`completed_by`);
 
 --
 -- Indexes for table `surgery_inventory`
@@ -613,6 +707,18 @@ ALTER TABLE `surgery_inventory`
   ADD PRIMARY KEY (`id`),
   ADD KEY `surgery_id` (`surgery_id`),
   ADD KEY `item_id` (`item_id`);
+
+--
+-- Indexes for table `triage`
+--
+ALTER TABLE `triage`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `queue_number` (`queue_number`),
+  ADD KEY `patient_id` (`patient_id`),
+  ADD KEY `assessed_by` (`assessed_by`),
+  ADD KEY `started_by` (`started_by`),
+  ADD KEY `completed_by` (`completed_by`),
+  ADD KEY `assigned_doctor` (`assigned_doctor`);
 
 --
 -- Indexes for table `users`
@@ -629,19 +735,19 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT for table `appointments`
 --
 ALTER TABLE `appointments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=16;
 
 --
 -- AUTO_INCREMENT for table `archive_logs`
 --
 ALTER TABLE `archive_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
 
 --
 -- AUTO_INCREMENT for table `billing`
 --
 ALTER TABLE `billing`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `financial_assessment`
@@ -665,13 +771,13 @@ ALTER TABLE `login_audit`
 -- AUTO_INCREMENT for table `medical_records`
 --
 ALTER TABLE `medical_records`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
 -- AUTO_INCREMENT for table `patients`
 --
 ALTER TABLE `patients`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=29;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT for table `post_op_equipment`
@@ -683,7 +789,7 @@ ALTER TABLE `post_op_equipment`
 -- AUTO_INCREMENT for table `surgeries`
 --
 ALTER TABLE `surgeries`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT for table `surgery_inventory`
@@ -692,10 +798,16 @@ ALTER TABLE `surgery_inventory`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=33;
 
 --
+-- AUTO_INCREMENT for table `triage`
+--
+ALTER TABLE `triage`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=13;
+
+--
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=36;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=40;
 
 --
 -- Constraints for dumped tables
@@ -706,10 +818,19 @@ ALTER TABLE `users`
 --
 ALTER TABLE `appointments`
   ADD CONSTRAINT `appointments_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_10` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_11` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_12` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_13` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_14` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `appointments_ibfk_2` FOREIGN KEY (`doctor_id`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `appointments_ibfk_3` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `appointments_ibfk_4` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `appointments_ibfk_5` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_6` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_7` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_8` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `appointments_ibfk_9` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `fk_appointments_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `fk_appointments_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`);
 
@@ -764,7 +885,8 @@ ALTER TABLE `medical_records`
 -- Constraints for table `patients`
 --
 ALTER TABLE `patients`
-  ADD CONSTRAINT `patients_ibfk_1` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`);
+  ADD CONSTRAINT `patients_ibfk_1` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `patients_ibfk_2` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`);
 
 --
 -- Constraints for table `post_op_equipment`
@@ -779,9 +901,20 @@ ALTER TABLE `surgeries`
   ADD CONSTRAINT `fk_surgeries_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `fk_surgeries_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`),
   ADD CONSTRAINT `surgeries_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_10` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_11` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_12` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_13` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_14` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_15` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `surgeries_ibfk_2` FOREIGN KEY (`doctor_id`) REFERENCES `users` (`id`),
   ADD CONSTRAINT `surgeries_ibfk_3` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
-  ADD CONSTRAINT `surgeries_ibfk_4` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`);
+  ADD CONSTRAINT `surgeries_ibfk_4` FOREIGN KEY (`archived_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_5` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_6` FOREIGN KEY (`cancelled_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_7` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_8` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `surgeries_ibfk_9` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`);
 
 --
 -- Constraints for table `surgery_inventory`
@@ -791,6 +924,19 @@ ALTER TABLE `surgery_inventory`
   ADD CONSTRAINT `fk_surgery_inventory_surgery` FOREIGN KEY (`surgery_id`) REFERENCES `surgeries` (`id`),
   ADD CONSTRAINT `surgery_inventory_ibfk_1` FOREIGN KEY (`surgery_id`) REFERENCES `surgeries` (`id`),
   ADD CONSTRAINT `surgery_inventory_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `inventory_items` (`id`);
+
+--
+-- Constraints for table `triage`
+--
+ALTER TABLE `triage`
+  ADD CONSTRAINT `triage_ibfk_1` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `triage_ibfk_2` FOREIGN KEY (`assessed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_3` FOREIGN KEY (`started_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_4` FOREIGN KEY (`started_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_5` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_6` FOREIGN KEY (`started_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_7` FOREIGN KEY (`completed_by`) REFERENCES `users` (`id`),
+  ADD CONSTRAINT `triage_ibfk_8` FOREIGN KEY (`assigned_doctor`) REFERENCES `users` (`id`);
 
 DELIMITER $$
 --

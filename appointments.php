@@ -441,23 +441,31 @@ $rows = fetchAll($conn, $query);
   .sortable-header.desc:after{ border-top:5px solid var(--navy-700); border-bottom:none; }
   .sortable-header:not(.asc):not(.desc):after{ border-top:5px solid #ccc; opacity:0.5; }
 
-  .status{
-    display:inline-block;
-    padding:6px 10px;
-    border-radius:16px;
-    font-weight:600;
-    font-size:13px;
-    cursor:pointer;
-    transition: filter 0.2s;
-  }
-  .status:hover{ filter: brightness(0.95); }
-  .status.editable{ cursor:pointer; }
-  .status.not-editable{ cursor:default; opacity:0.7; }
-  .pending{ background:#fff8e1; color:#8a6d00; }
-  .approved{ background:#e8f4ff; color:#1e6b8a; }
-  .completed{ background:#d1fae5; color:#065f46; }
-  .cancelled{ background:#fee2e2; color:#b91c1c; }
-  .archived{ background:#95a5a6; color:white; }
+ .status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: default;          /* not clickable */
+    transition: none;
+    background: transparent;   /* no background */
+}
+
+/* Remove any hover effect */
+.status:hover {
+    filter: none;
+}
+
+/* Text colors for each status – use slightly darker shades for readability */
+.pending { color: #b45f06; }        /* darker amber */
+.approved { color: #0b5e7c; }       /* darker teal */
+.completed { color: #0d6632; }      /* darker green */
+.cancelled { color: #a12b2b; }      /* darker red */
+.archived { color: #4a4f55; }       /* darker gray */
+.waiting { color: #b45f06; }        /* same as pending */
+.in_consultation { color: #5e3c9c; } /* darker purple */
+.scheduled { color: #1b6b8f; }      /* darker blue */
 
   .action-btn{
     padding:6px 10px;

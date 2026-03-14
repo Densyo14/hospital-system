@@ -3,6 +3,10 @@ session_start();
 require 'config.php';
 require 'functions.php';
 
+// Enable error reporting for debugging (remove in production)
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
+
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
@@ -12,11 +16,11 @@ if (!isset($_SESSION['user_id'])) {
 $current_role = $_SESSION['role'] ?? 'Guest';
 $current_name = $_SESSION['name'] ?? 'User';
 
-// Define role permissions for navigation (same as patients.php)
+// Define role permissions for navigation (including Triage Queue for Staff)
 $role_permissions = [
     'Admin' => [
         'dashboard.php' => 'Dashboard',
-        'patients.php' => 'Patients', 
+        'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
         'surgeries.php' => 'Surgeries',
         'inventory.php' => 'Inventory',
@@ -29,7 +33,7 @@ $role_permissions = [
     'Doctor' => [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
-        'appointments.php' => 'Appointments', 
+        'appointments.php' => 'Appointments',
         'surgeries.php' => 'Surgeries',
         'inventory.php' => 'Inventory',
         'reports.php' => 'Reports',
@@ -47,7 +51,8 @@ $role_permissions = [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
-        'reports.php' => 'Reports'
+        'reports.php' => 'Reports',
+        'triage_queue.php' => 'Triage Queue'   // <-- ADDED
     ],
     'Inventory' => [
         'dashboard.php' => 'Dashboard',
@@ -55,7 +60,7 @@ $role_permissions = [
         'reports.php' => 'Reports'
     ],
     'Billing' => [
-        'dashboard.php' => 'Dashboard', 
+        'dashboard.php' => 'Dashboard',
         'billing.php' => 'Billing',
         'financials.php' => 'Financial',
         'reports.php' => 'Reports'
@@ -92,7 +97,6 @@ if (isset($_GET['id'])) {
         $height     = $patient['height'] ?? '';
         $pulse_rate = $patient['pulse_rate'] ?? '';
         $temperature= $patient['temperature'] ?? '';
-        // No diagnosis field now
     }
 }
 
@@ -111,11 +115,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $height     = trim($_POST['height'] ?? '');
     $pulse_rate = trim($_POST['pulse_rate'] ?? '');
     $temperature= trim($_POST['temperature'] ?? '');
-    $initial_findings = trim($_POST['initial_findings'] ?? ''); // NEW field
+    $initial_findings = trim($_POST['initial_findings'] ?? '');
 
-    // Validation (same as before)
     $errors = [];
 
+    // Validation
     if (!preg_match('/^[a-zA-Z\s]+$/', $first_name)) {
         $errors[] = "First name should contain only letters and spaces.";
     }
@@ -139,27 +143,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Update existing patient
             $params = [$first_name, $last_name, $gender, $birth_date, $phone, $address, $guardian, $blood_type, $weight, $height, $pulse_rate, $temperature, $id];
             $types = "ssssssssddddi";
-            $result = execute($conn, "UPDATE patients SET first_name=?, last_name=?, gender=?, birth_date=?, phone=?, address=?, guardian=?, blood_type=?, weight=?, height=?, pulse_rate=?, temperature=? WHERE id=?", $types, $params);
+            $sql = "UPDATE patients SET first_name=?, last_name=?, gender=?, birth_date=?, phone=?, address=?, guardian=?, blood_type=?, weight=?, height=?, pulse_rate=?, temperature=? WHERE id=?";
+            $result = execute($conn, $sql, $types, $params);
             $patient_id = $id;
             $action = 'updated';
         } else {
             // Insert new patient with created_by
-            // Insert new patient with created_by
-$patient_code = generate_patient_code($conn);
-$params = [$patient_code, $first_name, $last_name, $gender, $birth_date, $phone, $address, $guardian, $blood_type, $weight, $height, $pulse_rate, $temperature, $_SESSION['user_id']];
-$types = "sssssssssddddi"; // 9 strings, 4 decimals, 1 integer = 14 placeholders
-$result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_name, gender, birth_date, phone, address, guardian, blood_type, weight, height, pulse_rate, temperature, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", $types, $params);
+            $patient_code = generate_patient_code($conn);
+            $params = [$patient_code, $first_name, $last_name, $gender, $birth_date, $phone, $address, $guardian, $blood_type, $weight, $height, $pulse_rate, $temperature, $_SESSION['user_id']];
+            $types = "sssssssssddddi"; // 9 strings, 4 decimals, 1 integer
+            $sql = "INSERT INTO patients (patient_code, first_name, last_name, gender, birth_date, phone, address, guardian, blood_type, weight, height, pulse_rate, temperature, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            $result = execute($conn, $sql, $types, $params);
+            $patient_id = $conn->insert_id;
+            $action = 'added';
 
-            // If initial findings were entered, we could store them in session to pre-fill triage form, or show a prompt.
-            // For now, we'll store in session to be used after redirect.
-            if (!empty($initial_findings)) {
+            // Store initial findings in session for triage
+            if (!empty($initial_findings) && $patient_id) {
                 $_SESSION['initial_findings_for_triage'] = $initial_findings;
                 $_SESSION['triage_patient_id'] = $patient_id;
             }
         }
 
         if (!isset($result['error'])) {
-            // Redirect with success message
             header("Location: patients.php?success=$action&action=$action&patient_id=$patient_id");
             exit();
         } else {
@@ -168,16 +173,15 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     }
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Hospital Dashboard - <?php echo $edit ? "Update Patient" : "Add Patient"; ?></title>
+<title><?= $edit ? "Update Patient" : "Add Patient" ?></title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Copy all styles from previous version, but we can keep minimal */
+  /* (Keep your existing styles – they are fine) */
   :root{
     --bg: #eef3f7;
     --panel: #ffffff;
@@ -196,7 +200,7 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     color:#0f1724;
   }
   .app { display:flex; min-height:100vh; }
-  .sidebar { /* same as before, we can reuse or include via external CSS, but we'll keep short for brevity */
+  .sidebar {
     width:230px;
     background:linear-gradient(180deg, var(--sidebar), #001a33 120%);
     color:#eaf5ff;
@@ -340,8 +344,6 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     border:1px solid #e6eef0;
     border-radius:8px;
     font-size:14px;
-    font-family:inherit;
-    transition:border-color 0.2s, box-shadow 0.2s;
     background:#f8fbfd;
   }
   .form-control:focus{
@@ -351,8 +353,6 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     background:white;
   }
   .form-text{ font-size:12px; color:var(--muted); margin-top:2px; }
-  .form-error{ color:#e53e3e; font-size:12px; margin-top:4px; }
-
   .form-actions{
     display:flex;
     gap:12px;
@@ -394,7 +394,6 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     transform:translateY(-1px);
     color:white;
   }
-
   .alert{
     padding:12px 16px;
     border-radius:8px;
@@ -408,7 +407,7 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
 <body>
 <div class="app">
 
-  <!-- SIDEBAR (same as patients.php) -->
+  <!-- SIDEBAR (with full icons and Triage Queue for Staff) -->
   <aside class="sidebar" id="sidebar">
     <div class="logo-wrap"><a href="dashboard.php"><img src="logo.jpg" alt="Logo"></a></div>
     <div class="user-info">
@@ -465,7 +464,7 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
     <div id="toast" class="toast-container"></div>
 
     <div class="form-card">
-      <?php if (isset($errors) && !empty($errors)): ?>
+      <?php if (!empty($errors)): ?>
         <div class="alert alert-error">
           <strong>Please correct the following errors:</strong><br>
           <?php foreach ($errors as $error): ?> • <?= htmlspecialchars($error) ?><br><?php endforeach; ?>
@@ -547,7 +546,7 @@ $result = execute($conn, "INSERT INTO patients (patient_code, first_name, last_n
           </div>
         </div>
 
-        <!-- NEW: Initial Findings field (optional) -->
+        <!-- Initial Findings field (optional) -->
         <div class="form-group" style="margin-top: 20px;">
           <label class="form-label">Initial Findings (Optional)</label>
           <textarea name="initial_findings" class="form-control" rows="3" placeholder="Enter any initial observations (will be used in triage)"><?= htmlspecialchars($initial_findings) ?></textarea>
@@ -594,7 +593,6 @@ function validateForm() {
   return true;
 }
 function showToast(msg, type) {
-  // optional toast function (can be omitted if not needed)
   alert(msg); // simple fallback
 }
 </script>

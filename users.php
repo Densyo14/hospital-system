@@ -28,7 +28,7 @@ $role_permissions = [
         'inventory.php' => 'Inventory',
         'billing.php' => 'Billing',
         'financials.php' => 'Financial',
-        'reports.php' => 'Reports',  // ADDED THIS LINE
+        'reports.php' => 'Reports',
         'users.php' => 'Users'
     ],
     'Doctor' => [
@@ -37,40 +37,39 @@ $role_permissions = [
         'appointments.php' => 'Appointments', 
         'surgeries.php' => 'Surgeries',
         'inventory.php' => 'Inventory',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ],
     'Nurse' => [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
         'inventory.php' => 'Inventory',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ],
     'Staff' => [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ],
     'Inventory' => [
         'dashboard.php' => 'Dashboard',
         'inventory.php' => 'Inventory',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ],
     'Billing' => [
         'dashboard.php' => 'Dashboard', 
         'billing.php' => 'Billing',
         'financials.php' => 'Financial',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ],
-    'MedicalRecordsBilling' => [  // CHANGED FROM SocialWorker TO MedicalRecordsBilling
+    'MedicalRecordsBilling' => [
         'dashboard.php' => 'Dashboard',
         'financials.php' => 'Financial',
-        'reports.php' => 'Reports'  // ADDED THIS LINE
+        'reports.php' => 'Reports'
     ]
 ];
 
-// Get allowed pages for current role
 $allowed_pages = $role_permissions[$current_role] ?? ['dashboard.php' => 'Dashboard'];
 
 // Preprocessing
@@ -147,7 +146,7 @@ $rows = fetchAll($conn, "
 $total_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users", null, []);
 $active_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE is_active = 1", null, []);
 $doctor_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role = 'Doctor'", null, []);
-$staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role IN ('Staff', 'Nurse', 'Inventory', 'Billing', 'MedicalRecordsBilling')", null, []); // UPDATED ROLE NAME
+$staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role IN ('Staff', 'Nurse', 'Inventory', 'Billing', 'MedicalRecordsBilling')", null, []);
 ?>
 
 <!DOCTYPE html>
@@ -155,7 +154,7 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Gig Oca Robles Seamen's Hospital Davao - User Management</title> <!-- CHANGED TITLE -->
+<title>Gig Oca Robles Seamen's Hospital Davao - User Management</title>
 
 <!-- Google Font -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -165,10 +164,10 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
     --bg: #eef3f7;
     --panel: #ffffff;
     --muted: #6b7280;
-    --navy-700: #001F3F;          /* Dark Navy */
-    --accent: #003366;            /* Medium Navy */
-    --sidebar: #002855;           /* Sidebar Navy */
-    --light-blue: #4d8cc9;        /* Light Blue for accents */
+    --navy-700: #001F3F;
+    --accent: #003366;
+    --sidebar: #002855;
+    --light-blue: #4d8cc9;
     --card-shadow: 0 6px 22px rgba(16,24,40,0.06);
     --glass: rgba(255,255,255,0.6);
   }
@@ -430,7 +429,6 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
     animation: slideIn 0.3s ease;
   }
 
-  /* Toast color classes */
   .alert-success {
     background: #38a169;
     border-left: 4px solid #2f855a;
@@ -481,21 +479,35 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
   thead th{background:#f8fbfd;padding:14px;text-align:left;color:#6b7280;font-weight:600; border-bottom: 2px solid #e6eef0;}
   td, th{padding:14px;border-bottom:1px solid #f0f3f4;color:#233}
   
-  /* Status badges */
-  .status{display:inline-block;padding:6px 10px;border-radius:16px;font-weight:600;font-size:13px}
-  .active{background:#e8f4ff;color:#1e6b8a}
-  .inactive{background:#ffe8e8;color:#b02b2b}
-  .pending{background:#fff8e1;color:#8a6d00}
+  /* Status badges – no background, only colored text */
+  .status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 13px;
+    background: transparent;
+  }
+  .status.active   { color: #0d6632; } /* dark green */
+  .status.inactive { color: #a12b2b; } /* dark red */
+  .status.pending  { color: #b45f06; } /* amber */
   
-  /* Role badges - UPDATED FOR MedicalRecordsBilling */
-  .role{display:inline-block;padding:6px 10px;border-radius:16px;font-weight:600;font-size:13px}
-  .role-admin{background:#ffe8e8;color:#b02b2b}
-  .role-doctor{background:#e8f4ff;color:#1e6b8a}
-  .role-nurse{background:#f0e8ff;color:#6b46c1}
-  .role-staff{background:#fff8e1;color:#8a6d00}
-  .role-inventory{background:#ffe8f0;color:#97266d}
-  .role-billing{background:#e8ffe8;color:#276749}
-  .role-medicalrecordsbilling{background:#f0e8ff;color:#553c9a}
+  /* Role badges – no background, only colored text */
+  .role {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 13px;
+    background: transparent;
+  }
+  .role-admin          { color: #a12b2b; } /* dark red */
+  .role-doctor         { color: #0b5e7c; } /* dark teal */
+  .role-nurse          { color: #5e3c9c; } /* dark purple */
+  .role-staff          { color: #b45f06; } /* amber */
+  .role-inventory      { color: #97266d; } /* dark pink */
+  .role-billing        { color: #0d6632; } /* dark green */
+  .role-medicalrecordsbilling { color: #553c9a; } /* deep purple */
 
   /* Summary Cards */
   .summary-cards {
@@ -564,7 +576,7 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
     pointer-events: none;
   }
 
-  /* Role badge styling */
+  /* Role badge in header */
   .role-badge {
     display: inline-block;
     padding: 4px 12px;
@@ -572,14 +584,15 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
     font-size: 0.8rem;
     font-weight: bold;
     margin-left: 10px;
+    background: transparent;
   }
-  .role-admin { background: #001F3F; color: white; }
-  .role-doctor { background: #003366; color: white; }
-  .role-nurse { background: #4d8cc9; color: white; }
-  .role-staff { background: #6b7280; color: white; }
-  .role-inventory { background: #1e6b8a; color: white; }
-  .role-billing { background: #0066cc; color: white; }
-  .role-medicalrecordsbilling { background: #34495e; color: white; }
+  .role-admin { color: #001F3F; background: transparent; }
+  .role-doctor { color: #003366; background: transparent; }
+  .role-nurse { color: #4d8cc9; background: transparent; }
+  .role-staff { color: #6b7280; background: transparent; }
+  .role-inventory { color: #1e6b8a; background: transparent; }
+  .role-billing { color: #0066cc; background: transparent; }
+  .role-medicalrecordsbilling { color: #34495e; background: transparent; }
 
   /* Modal */
   .modal-content {
@@ -632,7 +645,7 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
     <aside class="sidebar" id="sidebar">
       <div class="logo-wrap">
         <a href="dashboard.php" style="display: block;">
-          <img src="logo.jpg" alt="Gig Oca Robles Seamen's Hospital Davao Logo"> <!-- CHANGED ALT TEXT -->
+          <img src="logo.jpg" alt="Gig Oca Robles Seamen's Hospital Davao Logo">
         </a>
       </div>
 
@@ -761,7 +774,7 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
             <?php if (count($rows) > 0): ?>
               <?php foreach($rows as $r): ?>
                 <?php
-                // Role class - UPDATED FOR MedicalRecordsBilling
+                // Role class
                 $role_class_map = [
                     'Admin' => 'role-admin',
                     'Doctor' => 'role-doctor',
@@ -769,7 +782,7 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
                     'Staff' => 'role-staff',
                     'Inventory' => 'role-inventory',
                     'Billing' => 'role-billing',
-                    'MedicalRecordsBilling' => 'role-medicalrecordsbilling' // UPDATED ROLE
+                    'MedicalRecordsBilling' => 'role-medicalrecordsbilling'
                 ];
                 $role_class = $role_class_map[$r['role']] ?? 'role-staff';
                 
@@ -870,7 +883,6 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
   </div><!-- .app -->
 
   <script>
-    /* Confirmation functions */
     function confirmDeactivate(userId, userName) {
         if (confirm(`Deactivate user "${userName}"? This user will no longer be able to log in.`)) {
             window.location.href = 'users.php?deactivate=' + encodeURIComponent(userId);
@@ -883,12 +895,10 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
         }
     }
 
-    /* Toast notifications */
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast');
         if (!container) return;
         
-        // Map type to CSS class
         const typeClasses = {
             'success': 'alert-success',
             'error': 'alert-error',
@@ -914,7 +924,6 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
         }, 5000);
     }
 
-    /* Search functionality */
     const searchInput = document.getElementById('searchInput');
     const usersTable = document.getElementById('usersTable');
     const tbody = usersTable.querySelector('tbody');
@@ -935,13 +944,10 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
 
     if (searchInput) {
         searchInput.addEventListener('input', () => filterTable(searchInput.value));
-        // initialize count
         filterTable('');
     }
 
-    /* On page load: show toast & highlight if redirected */
     document.addEventListener('DOMContentLoaded', function() {
-        // success messages passed via query string
         const success = <?php echo json_encode($success); ?>;
         const action  = <?php echo json_encode($action); ?>;
         const uId     = <?php echo json_encode($user_id); ?>;
@@ -957,7 +963,6 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
             };
             const msg = messages[success] || 'Operation completed.';
             
-            // Determine toast type based on success
             let toastType = 'success';
             if (success === 'error') toastType = 'error';
             else if (success === 'warning') toastType = 'warning';
@@ -965,7 +970,6 @@ $staff_stats = fetchOne($conn, "SELECT COUNT(*) as total FROM users WHERE role I
             
             showToast(msg, toastType);
 
-            // Highlight added/updated/activated/deactivated row if id present
             if (uId && ['added','updated','activated','deactivated'].includes(success)) {
                 setTimeout(() => {
                     const row = document.querySelector(`tr[data-user-id="${uId}"]`);

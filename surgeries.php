@@ -398,18 +398,32 @@ $doctors = fetchAll($conn, "SELECT id, full_name FROM users WHERE role = 'Doctor
   .sortable-header.desc:after{ border-top:5px solid var(--navy-700); border-bottom:none; }
   .sortable-header:not(.asc):not(.desc):after{ border-top:5px solid #ccc; opacity:0.5; }
 
-  .status{
-    display:inline-block;
-    padding:6px 10px;
-    border-radius:16px;
-    font-weight:600;
-    font-size:13px;
-  }
-  .scheduled{ background:#fff8e1; color:#8a6d00; }
-  .completed{ background:#d1fae5; color:#065f46; }
-  .cancelled{ background:#fee2e2; color:#b91c1c; }
-  .in-progress{ background:#e0f2fe; color:#0369a1; }
-  .archived{ background:#95a5a6; color:white; }
+  .status {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: default;          /* not clickable */
+    transition: none;
+    background: transparent;   /* no background */
+}
+
+/* No hover effect */
+.status:hover {
+    filter: none;
+}
+
+/* Text colors only – adjust shades as needed */
+.pending          { color: #b45f06; }   /* amber */
+.waiting          { color: #b45f06; }   /* same as pending */
+.scheduled        { color: #b45f06; }   /* optional */
+.approved         { color: #0b5e7c; }   /* teal */
+.completed        { color: #0d6632; }   /* green */
+.cancelled        { color: #a12b2b; }   /* red */
+.in-progress      { color: #1b6b8f; }   /* blue */
+.in_consultation  { color: #5e3c9c; }   /* purple */
+.archived         { color: #4a4f55; }   /* gray */
 
   .action-btn{
     padding:6px 10px;

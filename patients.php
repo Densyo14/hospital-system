@@ -47,7 +47,8 @@ $role_permissions = [
         'dashboard.php' => 'Dashboard',
         'patients.php' => 'Patients',
         'appointments.php' => 'Appointments',
-        'reports.php' => 'Reports'
+        'reports.php' => 'Reports',
+        'triage_queue.php' => 'Triage Queue'   // <-- ADDED
     ],
     'Inventory' => [
         'dashboard.php' => 'Dashboard',
@@ -577,8 +578,8 @@ $rows = fetchAll($conn, "
                     <a href="patient_form.php?id=<?= h($r['id']) ?>" class="action-btn btn-update">Update</a>
                   <?php endif; ?>
 
-                  <!-- Triage – for nurses/doctors (if patient not archived) -->
-                  <?php if (empty($r['is_archived']) && ($current_role === 'Nurse' || $current_role === 'Doctor')): ?>
+                  <!-- Triage – for nurses/doctors/staff (if patient not archived) -->
+                  <?php if (empty($r['is_archived']) && ($current_role === 'Nurse' || $current_role === 'Doctor' || $current_role === 'Staff')): ?>
                     <a href="triage_form.php?patient_id=<?= h($r['id']) ?>" class="action-btn btn-triage">Triage</a>
                   <?php endif; ?>
 
